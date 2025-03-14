@@ -1,0 +1,163 @@
+name: Pull Request Reusable
+
+on:
+  workflow_call:
+    inputs:
+      run-integration-tests:
+        required: false
+        default: 'true'
+        type: string
+
+env:
+  PGHOST: localhost
+  PGPORT: 15432
+  PGUSER: postgres
+  PGPASSWORD: postgres
+  PGDATABASE: nfa_test
+  SU_USER: postgres
+  SU_PASSWORD: postgres
+  SU_DB: postgres
+  NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  AWS_DYNAMO_DB_TABLE: nfa-test
+  AWS_DYNAMO_DB_ACCESS_KEY_ID: DUMMYIDEXAMPLE
+  AWS_DYNAMO_DB_SECRET_ACCESS_KEY: DUMMYEXAMPLEKEY
+  AWS_DYNAMO_DB_REGION: us-west-2
+  AWS_DYNAMO_DB_ENDPOINT: http://localhost:18000
+  EVENT_SOURCE: Memory
+  SCHEDULER_SOURCE: Memory
+
+jobs:
+  pr-opened:
+    name: PR Opened
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && 
+      (github.event.action == 'opened' || github.event.action == 'reopened' || github.event.action == 'ready_for_review')
+    steps:
+      - uses: zerobias-org/devops/actions/content-pr-opened@main
+
+  test:
+    name: Test
+    runs-on: [self-hosted, Linux]
+    if: github.event_name == 'pull_request' && 
+      (github.event.action == 'synchronize' || 
+      (github.event.action == 'labeled'
+      && contains(github.event.pull_request.labels.*.name, 'dev')
+      && !contains(github.event.pull_request.labels.*.name, 'qa')
+      && !contains(github.event.pull_request.labels.*.name, 'uat')))
+
+    services:
+      postgres:
+        image: supabase/postgres:14.1.0
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 15432:5432
+      
+      dynamodb:
+        image: amazon/dynamodb-local
+        ports:
+          - 18000:8000
+
+    steps:
+      - name: check if ruby installed
+        id: rubyInstalled
+        run: |
+          if ! command -v ruby &> /dev/null
+          then
+            echo "ruby not found, will install"
+            echo "rubyInstalled=false" >> $GITHUB_OUTPUT
+          else
+            echo "rubyInstalled=true" >> $GITHUB_OUTPUT
+          fi
+      - uses: ruby/setup-ruby@v1
+        if: ${{ steps.rubyInstalled.outputs.rubyInstalled == 'false' }}
+        with:
+          ruby-version: '3.0'
+      - uses: zerobias-org/devops/actions/content-test@main
+        with:
+          run-integration-tests: ${{ inputs.run-integration-tests }}
+
+  publish-pre-release:
+    runs-on: [self-hosted, Linux]
+    name: Publish Pre-release
+    needs: test
+    if: |
+      always() &&
+      !cancelled() &&
+      !contains(needs.*.result, 'failure') &&
+      (github.event_name == 'pull_request' &&
+      (github.event.action == 'synchronize' ||
+      (github.event.action == 'labeled') &&
+      (contains(github.event.pull_request.labels.*.name, 'dev'))))
+    steps:
+      - name: Content PR Publish
+        if: github.event_name == 'pull_request' && 
+          (github.event.action == 'synchronize' || 
+          (github.event.action == 'labeled'
+          && contains(github.event.pull_request.labels.*.name, 'dev')
+          && !contains(github.event.pull_request.labels.*.name, 'qa')
+          && !contains(github.event.pull_request.labels.*.name, 'uat')))
+        uses: zerobias-org/devops/actions/content-pr-publish@main
+
+      - name: Content Pre-release
+        uses: zerobias-org/devops/actions/content-pre-release@main
+        if: github.event.action == 'labeled'
+          && contains(github.event.pull_request.labels.*.name, 'dev')
+          && (contains(github.event.pull_request.labels.*.name, 'qa') || contains(github.event.pull_request.labels.*.name, 'uat'))
+        with: 
+          qaAssignee: dsimonca
+          uatAssignee: dsimonca
+          since: origin/${{ github.base_ref }}
+
+      - name: Check for scripts/cdnUpdate.sh
+        id: cdnUpdateExists
+        run: |
+          if [ -x scripts/cdnUpdate.sh ]; then
+            echo "cdnUpdateExists=true"
+            echo "cdnUpdateExists=true" >> $GITHUB_OUTPUT
+          else
+            echo "cdnUpdateExists=false"
+            echo "cdnUpdateExists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        with:
+          hugo-version: '0.110.0'
+          extended: true
+
+      - name: configure aws tools creds
+        uses: aws-actions/configure-aws-credentials@v1
+        if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        with:
+          role-to-assume: ${{ secrets.GITHUB_ACTIONS_PUBLISHING_ROLE }}
+          role-session-name: ${{ github.event.repository.name }}
+          aws-region: ${{ secrets.GITHUB_ACTIONS_PUBLISHING_REGION }}
+
+      - name: CDN Update
+        if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        run: |
+          if [ -x scripts/cdnUpdate.sh ]; then
+            ./scripts/cdnUpdate.sh
+          fi
+        env:
+          NPM_TOKEN: ${{ secrets.READ_TOKEN }}
+          SINCE: HEAD~1
+
+      - name: Slack Notification
+        uses: rtCamp/action-slack-notify@master
+        if: failure()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }} 
+          SLACK_ICON_EMOJI: ":fire"
+          MSG_MINIMAL: 'true'
+          SLACK_TITLE: ":fire: ${{ github.repository }} cdn update failed"
+          SLACK_MESSAGE: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          SLACK_COLOR: danger

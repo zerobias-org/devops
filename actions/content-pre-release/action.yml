@@ -1,0 +1,81 @@
+name: 'Content Pre-Release'
+description: 'Handle the pre-release flow for zerobias-org content'
+inputs:
+  since:
+    description: 'The ref to compare to determine what has released'
+    required: false
+    default: 'origin/main'
+  qaAssignee:
+    description: 'Who to assign this PR on transition to qa'
+    required: false
+    default: 'dsimonca'
+  uatAssignee:
+    description: 'Who to assign this PR on transition to uat'
+    required: false
+    default: 'dsimonca'
+runs:
+  using: 'composite'
+  steps:
+    - name: check out code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ github.head_ref }}
+
+    - name: setup node
+      uses: actions/setup-node@v3
+      with:
+        node-version-file: '.nvmrc'
+
+    - name: bootstrap
+      shell: bash
+      run: |
+        npm ci
+      env:
+        NPM_TOKEN: ${{ secrets.READ_TOKEN }}
+
+    - name: Assign to Dan
+      shell: bash
+      if: |
+        contains(github.event.pull_request.labels.*.name, 'dev') &&
+        contains(github.event.pull_request.labels.*.name, 'qa') &&
+        !contains(github.event.pull_request.labels.*.name, 'uat')
+      run: |
+        gh pr edit --remove-assignee ${{ inputs.uatAssignee }}
+        gh pr edit --add-assignee ${{ inputs.qaAssignee }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.PR_TOKEN }}
+
+    - name: Assign to Dan
+      shell: bash
+      if: |
+        contains(github.event.pull_request.labels.*.name, 'dev') &&
+        contains(github.event.pull_request.labels.*.name, 'qa') &&
+        contains(github.event.pull_request.labels.*.name, 'uat')
+      run: |
+        gh pr edit --remove-assignee ${{ inputs.qaAssignee }}
+        gh pr edit --add-assignee ${{ inputs.uatAssignee }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.PR_TOKEN }}
+
+    - name: Set dist-tags
+      uses: zerobias-org/devops/actions/content-dist-tag@main
+      with:
+        since: ${{ inputs.since }}
+
+    # Run only if just a tag workflow not a publish
+    - name: Post Pre Release
+      shell: bash
+      if: |
+        contains(github.event.pull_request.labels.*.name, 'dev') &&
+        contains(github.event.pull_request.labels.*.name, 'qa')
+      run: |
+        if [ -x scripts/postprerelease.sh ]
+        then
+          bash scripts/postprerelease.sh
+        fi
+
+    - name: Release Announcement
+      uses: zerobias-org/devops/actions/release-announcement@main
+      with:
+        since: ${{ inputs.since }}

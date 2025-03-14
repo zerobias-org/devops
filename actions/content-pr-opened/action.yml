@@ -1,0 +1,15 @@
+name: 'Content PR Opened'
+description: 'Runs when a content pr is opened or marked as ready for review to apply the `dev` label if it is not in draft.'
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.head_ref }}
+
+    - name: Add dev label
+      if: '!github.event.pull_request.draft'
+      run: gh pr edit --add-label "dev"  || echo "dev label already assigned"
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.PR_TOKEN }}

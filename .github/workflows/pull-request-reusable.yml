@@ -29,6 +29,7 @@ env:
   PR_TOKEN: ${{ secrets.PR_TOKEN }}
   READ_TOKEN: ${{ secrets.READ_TOKEN }}
   SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+  ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
 
 jobs:
   pr-opened:

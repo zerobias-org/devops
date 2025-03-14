@@ -1,0 +1,22 @@
+name: 'Setup NodeJS'
+description: 'Setup nodejs for zerobias-org use'
+inputs:
+  nodeVersionFile:
+    description: 'NodeJS version file to use'
+    required: false
+    default: '.nvmrc'
+runs:
+  using: 'composite'
+  steps:
+    - name: setup node
+      uses: actions/setup-node@v3
+      with:
+        node-version-file: '.nvmrc'
+
+    - name: setup npmrc
+      shell: bash
+      run: |
+        echo '@auditlogic:registry=https://pkg.zerobias.com' > $HOME/.npmrc
+        echo '@auditmation:registry=https://pkg.zerobias.com' >> $HOME/.npmrc
+        echo '//pkg.zerobias.com/:always-auth=true' >> $HOME/.npmrc
+        echo '//pkg.zerobias.com/:_authToken=${ZB_TOKEN}' >> $HOME/.npmrc

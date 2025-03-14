@@ -26,12 +26,15 @@ env:
   AWS_DYNAMO_DB_ENDPOINT: http://localhost:18000
   EVENT_SOURCE: Memory
   SCHEDULER_SOURCE: Memory
+  PR_TOKEN: ${{ secrets.PR_TOKEN }}
+  READ_TOKEN: ${{ secrets.READ_TOKEN }}
+  SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
 
 jobs:
   pr-opened:
     name: PR Opened
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && 
+    if: github.event_name == 'pull_request' &&
       (github.event.action == 'opened' || github.event.action == 'reopened' || github.event.action == 'ready_for_review')
     steps:
       - uses: zerobias-org/devops/actions/content-pr-opened@main
@@ -39,8 +42,8 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
-    if: github.event_name == 'pull_request' && 
-      (github.event.action == 'synchronize' || 
+    if: github.event_name == 'pull_request' &&
+      (github.event.action == 'synchronize' ||
       (github.event.action == 'labeled'
       && contains(github.event.pull_request.labels.*.name, 'dev')
       && !contains(github.event.pull_request.labels.*.name, 'qa')
@@ -58,7 +61,7 @@ jobs:
           --health-retries 5
         ports:
           - 15432:5432
-      
+
       dynamodb:
         image: amazon/dynamodb-local
         ports:
@@ -97,8 +100,8 @@ jobs:
       (contains(github.event.pull_request.labels.*.name, 'dev'))))
     steps:
       - name: Content PR Publish
-        if: github.event_name == 'pull_request' && 
-          (github.event.action == 'synchronize' || 
+        if: github.event_name == 'pull_request' &&
+          (github.event.action == 'synchronize' ||
           (github.event.action == 'labeled'
           && contains(github.event.pull_request.labels.*.name, 'dev')
           && !contains(github.event.pull_request.labels.*.name, 'qa')
@@ -110,7 +113,7 @@ jobs:
         if: github.event.action == 'labeled'
           && contains(github.event.pull_request.labels.*.name, 'dev')
           && (contains(github.event.pull_request.labels.*.name, 'qa') || contains(github.event.pull_request.labels.*.name, 'uat'))
-        with: 
+        with:
           qaAssignee: dsimonca
           uatAssignee: dsimonca
           since: origin/${{ github.base_ref }}
@@ -155,9 +158,9 @@ jobs:
         uses: rtCamp/action-slack-notify@master
         if: failure()
         env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }} 
-          SLACK_ICON_EMOJI: ":fire"
+          SLACK_WEBHOOK: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+          SLACK_ICON_EMOJI: ':fire'
           MSG_MINIMAL: 'true'
-          SLACK_TITLE: ":fire: ${{ github.repository }} cdn update failed"
-          SLACK_MESSAGE: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          SLACK_TITLE: ':fire: ${{ github.repository }} cdn update failed'
+          SLACK_MESSAGE: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
           SLACK_COLOR: danger

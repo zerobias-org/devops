@@ -40,9 +40,9 @@ runs:
     - name: configure aws tools creds
       uses: aws-actions/configure-aws-credentials@v2
       with:
-        role-to-assume: ${{ secrets.GITHUB_ACTIONS_PUBLISHING_ROLE }}
+        role-to-assume: ${{ env.GITHUB_ACTIONS_PUBLISHING_ROLE }}
         role-session-name: ${{ github.event.repository.name }}
-        aws-region: ${{ secrets.GITHUB_ACTIONS_PUBLISHING_REGION }}
+        aws-region: ${{ env.GITHUB_ACTIONS_PUBLISHING_REGION }}
 
     - name: Login to Amazon ECR
       id: login-ecr
@@ -52,8 +52,8 @@ runs:
       uses: docker/login-action@v1
       with:
         registry: ghcr.io
-        username: ${{ secrets.USERNAME }}
-        password: ${{ secrets.WRITE_TOKEN }}
+        username: ${{ env.USERNAME }}
+        password: ${{ env.WRITE_TOKEN }}
 
     - name: bootstrap
       shell: bash
@@ -63,7 +63,7 @@ runs:
         npx lerna bootstrap --since --ci --include-dependencies
         npx lerna run build --since --include-dependencies
       env:
-        NPM_TOKEN: ${{ secrets.READ_TOKEN }}
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
         JAVA_OPTS: "-Xms256m -Xmx1024m"
 
     # Need at at least a file in there as download action will fail if no artifact found
@@ -80,7 +80,7 @@ runs:
       run: |
         bash ${{ github.action_path }}/integrationTest.sh
       env:
-        NPM_TOKEN: ${{ secrets.READ_TOKEN }}
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
         DYNAMO_DB_TABLE: ${{ env.AWS_DYNAMO_DB_TABLE }}
         AWS_ACCESS_KEY_ID: ${{ env.AWS_DYNAMO_DB_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ env.AWS_DYNAMO_DB_SECRET_ACCESS_KEY }}
@@ -98,7 +98,7 @@ runs:
           bash scripts/prepublish-init.sh
         fi
       env:
-        NPM_TOKEN: ${{ secrets.READ_TOKEN }}
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
 
     - name: test:prepublish
       if: github.ref != 'refs/heads/main'
@@ -109,7 +109,7 @@ runs:
           npm run nx:prepublish
         fi
       env:
-        NPM_TOKEN: ${{ secrets.READ_TOKEN }}
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
         DYNAMO_DB_TABLE: ${{ env.AWS_DYNAMO_DB_TABLE }}
         AWS_ACCESS_KEY_ID: ${{ env.AWS_DYNAMO_DB_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ env.AWS_DYNAMO_DB_SECRET_ACCESS_KEY }}
@@ -127,7 +127,7 @@ runs:
           bash scripts/postpublish.sh --dry-run
         fi
       env:
-        NPM_TOKEN: ${{ secrets.READ_TOKEN }}
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
         UPLOAD_FOLDER_NAME: ci-upload
 
     - name: Upload test artifacts
@@ -143,7 +143,7 @@ runs:
       uses: rtCamp/action-slack-notify@master
       if: failure()
       env:
-        SLACK_WEBHOOK: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }} 
+        SLACK_WEBHOOK: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }} 
         SLACK_ICON_EMOJI: ":fire"
         MSG_MINIMAL: 'true'
         SLACK_TITLE: ":fire: ${{ github.repository }} pr test failed"

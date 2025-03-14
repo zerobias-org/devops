@@ -48,7 +48,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
+    runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
     if: github.event_name == 'pull_request' &&
       (github.event.action == 'synchronize' ||
       (github.event.action == 'labeled'
@@ -75,26 +75,26 @@ jobs:
           - 18000:8000
 
     steps:
-      - name: check if ruby installed
-        id: rubyInstalled
-        run: |
-          if ! command -v ruby &> /dev/null
-          then
-            echo "ruby not found, will install"
-            echo "rubyInstalled=false" >> $GITHUB_OUTPUT
-          else
-            echo "rubyInstalled=true" >> $GITHUB_OUTPUT
-          fi
+      # - name: check if ruby installed
+      #   id: rubyInstalled
+      #   run: |
+      #     if ! command -v ruby &> /dev/null
+      #     then
+      #       echo "ruby not found, will install"
+      #       echo "rubyInstalled=false" >> $GITHUB_OUTPUT
+      #     else
+      #       echo "rubyInstalled=true" >> $GITHUB_OUTPUT
+      #     fi
       - uses: ruby/setup-ruby@v1
-        if: ${{ steps.rubyInstalled.outputs.rubyInstalled == 'false' }}
+        # if: ${{ steps.rubyInstalled.outputs.rubyInstalled == 'false' }}
         with:
-          ruby-version: '3.0'
+          ruby-version: '3.1'
       - uses: zerobias-org/devops/actions/content-test@main
         with:
           run-integration-tests: ${{ inputs.run-integration-tests }}
 
   publish-pre-release:
-    runs-on: ubuntu-latest # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
+    runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
     name: Publish Pre-release
     needs: test
     if: |

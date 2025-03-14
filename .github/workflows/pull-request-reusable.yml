@@ -38,7 +38,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: [Linux] # TO-DO: add self-hosted when ready
+    runs-on: ubuntu-latest # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
     if: github.event_name == 'pull_request' && 
       (github.event.action == 'synchronize' || 
       (github.event.action == 'labeled'
@@ -84,7 +84,7 @@ jobs:
           run-integration-tests: ${{ inputs.run-integration-tests }}
 
   publish-pre-release:
-    runs-on: [Linux] # TO-DO: add self-hosted when ready
+    runs-on: ubuntu-latest # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
     name: Publish Pre-release
     needs: test
     if: |

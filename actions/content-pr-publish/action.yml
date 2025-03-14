@@ -1,0 +1,99 @@
+name: 'Content PR Publish'
+description: 'Handle the PR publish flow for zerobias-org content'
+runs:
+  using: "composite"
+  steps:
+    - name: check out code
+      uses: actions/cache@v4
+      with:
+        path: .git
+        key: ${{ github.repository }}-git-folder
+
+    - name: check out code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ github.head_ref }}
+
+    - uses: zerobias-org/devops/actions/setup-node@main
+    - name: Setup Hugo
+      uses: peaceiris/actions-hugo@v2
+      with:
+        hugo-version: '0.110.0'
+        extended: true
+
+    - name: reset pr labels
+      shell: bash
+      run: |
+        gh pr edit --remove-label qa || echo "No qa label"
+        gh pr edit --remove-label uat || echo "No uat label"
+      env:
+        GITHUB_TOKEN: ${{ secrets.PR_TOKEN }}
+    - name: configure git user
+      shell: bash
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+    
+    - uses: actions/download-artifact@v4
+      continue-on-error: true
+      id: download
+      with:
+        name: ci-upload
+        path: ~/ci-upload
+
+    - name: 'Echo download path'
+      shell: bash
+      run: echo ${{steps.download.outputs.download-path}}
+
+    - name: bootstrap
+      shell: bash
+      run: |
+        npm ci
+        npx lerna bootstrap --since --ci --include-dependencies
+        npx lerna run build --since --include-dependencies
+      env:
+        NPM_TOKEN: ${{ secrets.READ_TOKEN }}
+        JAVA_OPTS: "-Xms256m -Xmx1024m"
+    - name: publish
+      shell: bash
+      run: |
+        if npm run | grep -q "nx:pr-publish"; then
+          if [ -x scripts/pr-publish.sh ]; then
+            npx lerna version --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
+            npm run nx:pr-publish
+          else
+            npx lerna publish --conventional-prerelease --preid rc --conventional-commits --yes --no-verify-access --pre-dist-tag rc --dist-tag rc
+          fi
+        else
+          npx lerna publish --conventional-prerelease --preid rc --conventional-commits --yes --no-verify-access --pre-dist-tag rc --dist-tag rc
+        fi
+
+    - name: Content Pre-release
+      uses: zerobias-org/devops/actions/content-pre-release@main
+      with: 
+        qaAssignee: dsimonca
+        uatAssignee: dsimonca
+        since: HEAD~1
+
+    - name: Post PR Publish
+      shell: bash
+      run: |
+        if [ -x scripts/postprpublish.sh ]
+        then
+          npm config list
+          bash scripts/postprpublish.sh
+        fi
+      env:
+        UPLOAD_FOLDER_PATH: ${{steps.download.outputs.download-path}}
+
+    - name: Slack Notification
+      uses: rtCamp/action-slack-notify@master
+      if: failure()
+      env:
+        SLACK_WEBHOOK: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+        SLACK_ICON_EMOJI: ":fire"
+        MSG_MINIMAL: 'true'
+        SLACK_TITLE: ":fire: ${{ github.repository }} pr publish failed "
+        SLACK_MESSAGE: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        SLACK_COLOR: danger

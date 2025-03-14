@@ -35,9 +35,9 @@ runs:
     - name: configure aws tools creds
       uses: aws-actions/configure-aws-credentials@v2
       with:
-        role-to-assume: ${{ env.PUBLISHING_ROLE }}
+        role-to-assume: ${{ env.AWS_PUBLISHING_ROLE }}
         role-session-name: ${{ github.event.repository.name }}
-        aws-region: ${{ env.PUBLISHING_REGION }}
+        aws-region: ${{ env.AWS_PUBLISHING_REGION }}
 
     - name: Generate Slack Message 
       id: generateSlackMessage

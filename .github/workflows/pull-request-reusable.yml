@@ -33,8 +33,8 @@ env:
   SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
   ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
   DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
-  PUBLISHING_ROLE: ${{ secrets.PUBLISHING_ROLE }}
-  PUBLISHING_REGION: ${{ secrets.PUBLISHING_REGION }}
+  AWS_PUBLISHING_ROLE: ${{ secrets.AWS_PUBLISHING_ROLE }}
+  AWS_PUBLISHING_REGION: ${{ secrets.AWS_PUBLISHING_REGION }}
   USERNAME: ${{ secrets.USERNAME }}
 
 jobs:
@@ -136,9 +136,9 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v1
         if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
         with:
-          role-to-assume: ${{ env.PUBLISHING_ROLE }}
+          role-to-assume: ${{ env.AWS_PUBLISHING_ROLE }}
           role-session-name: ${{ github.event.repository.name }}
-          aws-region: ${{ env.PUBLISHING_REGION }}
+          aws-region: ${{ env.AWS_PUBLISHING_REGION }}
 
       - name: CDN Update
         if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}

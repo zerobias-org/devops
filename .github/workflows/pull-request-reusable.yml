@@ -33,8 +33,8 @@ env:
   SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
   ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
   DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
-  GITHUB_ACTIONS_PUBLISHING_ROLE: ${{ secrets.GITHUB_ACTIONS_PUBLISHING_ROLE }}
-  GITHUB_ACTIONS_PUBLISHING_REGION: ${{ secrets.GITHUB_ACTIONS_PUBLISHING_REGION }}
+  PUBLISHING_ROLE: ${{ secrets.PUBLISHING_ROLE }}
+  PUBLISHING_REGION: ${{ secrets.PUBLISHING_REGION }}
   USERNAME: ${{ secrets.USERNAME }}
 
 jobs:
@@ -75,18 +75,7 @@ jobs:
           - 18000:8000
 
     steps:
-      # - name: check if ruby installed
-      #   id: rubyInstalled
-      #   run: |
-      #     if ! command -v ruby &> /dev/null
-      #     then
-      #       echo "ruby not found, will install"
-      #       echo "rubyInstalled=false" >> $GITHUB_OUTPUT
-      #     else
-      #       echo "rubyInstalled=true" >> $GITHUB_OUTPUT
-      #     fi
       - uses: ruby/setup-ruby@v1
-        # if: ${{ steps.rubyInstalled.outputs.rubyInstalled == 'false' }}
         with:
           ruby-version: '3.1'
       - uses: zerobias-org/devops/actions/content-test@main
@@ -147,9 +136,9 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v1
         if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
         with:
-          role-to-assume: ${{ secrets.GITHUB_ACTIONS_PUBLISHING_ROLE }}
+          role-to-assume: ${{ env.PUBLISHING_ROLE }}
           role-session-name: ${{ github.event.repository.name }}
-          aws-region: ${{ secrets.GITHUB_ACTIONS_PUBLISHING_REGION }}
+          aws-region: ${{ env.PUBLISHING_REGION }}
 
       - name: CDN Update
         if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}

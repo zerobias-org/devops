@@ -32,7 +32,7 @@ runs:
       run: |
         npm ci
       env:
-        NPM_TOKEN: ${{ secrets.READ_TOKEN }}
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
 
     - name: Assign to Dan
       shell: bash
@@ -44,7 +44,7 @@ runs:
         gh pr edit --remove-assignee ${{ inputs.uatAssignee }}
         gh pr edit --add-assignee ${{ inputs.qaAssignee }}
       env:
-        GITHUB_TOKEN: ${{ secrets.PR_TOKEN }}
+        GITHUB_TOKEN: ${{ env.PR_TOKEN }}
 
     - name: Assign to Dan
       shell: bash
@@ -56,7 +56,7 @@ runs:
         gh pr edit --remove-assignee ${{ inputs.qaAssignee }}
         gh pr edit --add-assignee ${{ inputs.uatAssignee }}
       env:
-        GITHUB_TOKEN: ${{ secrets.PR_TOKEN }}
+        GITHUB_TOKEN: ${{ env.PR_TOKEN }}
 
     - name: Set dist-tags
       uses: zerobias-org/devops/actions/content-dist-tag@main

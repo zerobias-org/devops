@@ -16,7 +16,7 @@ runs:
     - name: setup npmrc
       shell: bash
       run: |
-        echo '@auditlogic:registry=https://pkg.zerobias.com' > $HOME/.npmrc
-        echo '@auditmation:registry=https://pkg.zerobias.com' >> $HOME/.npmrc
-        echo '//pkg.zerobias.com/:always-auth=true' >> $HOME/.npmrc
-        echo '//pkg.zerobias.com/:_authToken=${ZB_TOKEN}' >> $HOME/.npmrc
+        echo '@auditlogic:registry=https://npm.pkg.github.com/' > $HOME/.npmrc
+        echo '@auditmation:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
+        echo '//npm.pkg.github.com/:always-auth=true' >> $HOME/.npmrc
+        echo '//npm.pkg.github.com/:_authToken=${NPM_TOKEN}' >> $HOME/.npmrc

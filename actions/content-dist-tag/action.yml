@@ -14,6 +14,15 @@ runs:
       with:
         sha: ${{ github.event.pull_request.head.sha }}
 
+    - name: setup npmrc
+      shell: bash
+      run: |
+        echo '@auditlogic:registry=https://npm.pkg.github.com/' > $HOME/.npmrc
+        echo '@auditmation:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
+        echo '@zerobias-org:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
+        echo '//npm.pkg.github.com/:always-auth=true' >> $HOME/.npmrc
+        echo '//npm.pkg.github.com/:_authToken=${NPM_TOKEN}' >> $HOME/.npmrc
+
     - name: Apply dev tag
       shell: bash
       if: contains(steps.pr.outputs.pr_labels, 'dev')

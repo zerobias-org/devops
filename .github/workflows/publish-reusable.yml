@@ -30,6 +30,7 @@ env:
   AWS_PUBLISHING_ROLE: ${{ secrets.AWS_PUBLISHING_ROLE }}
   AWS_PUBLISHING_REGION: ${{ secrets.AWS_PUBLISHING_REGION }}
   DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+  ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
 
 jobs:
   publish:

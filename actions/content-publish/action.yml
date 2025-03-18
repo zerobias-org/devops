@@ -1,0 +1,144 @@
+name: 'Content Publish'
+description: 'Runs to publish a zerobias-org content'
+inputs:
+  publishToken:
+    description: Token with permissions to publish packages
+    required: true
+  update-all:
+    description: 'Set to true to update all content in the repo'
+    required: false
+    default: 'false'
+  skip-publish-announcement:
+    description: 'Skips release announcement'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: check out code
+      uses: actions/cache@v4
+      with:
+        path: .git
+        key: ${{ github.repository }}-git-folder
+    - name: check out code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: zerobias-org/devops/actions/setup-node@main
+    - name: Setup Hugo
+      uses: peaceiris/actions-hugo@v2
+      with:
+        hugo-version: '0.110.0'
+        extended: true
+    # - name: CDN Update
+    #   uses: zerobias-org/devops/actions/cdn-update@main
+    #   with:
+    #     update-all: ${{ inputs.update-all }}
+    - name: configure git user
+      shell: bash
+      run: |
+        git config --global user.email "ci@neverfail.com"
+        git config --global user.name "@$GITHUB_ACTOR"
+    - name: configure aws tools creds
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        role-to-assume: arn:aws:iam::961260934100:role/github-actions-publishing-role
+        role-session-name: ${{ github.event.repository.name }}
+        aws-region: us-east-1
+    - name: save tools profile
+      shell: bash
+      run: |
+        aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID --profile tools
+        aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY --profile tools
+        aws configure set aws_session_token $AWS_SESSION_TOKEN --profile tools
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+      with:
+        platforms: linux/amd64,linux/arm64
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+    - name: bootstrap
+      shell: bash
+      run: |
+        cp .npmrc $HOME/.npmrc
+        npm ci
+        npx lerna bootstrap --since --ci --include-dependencies
+        npx lerna run build --since --include-dependencies
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        JAVA_OPTS: "-Xms256m -Xmx1024m"
+    - name: prepublish:init
+      shell: bash
+      run: |
+        if [ -x scripts/prepublish-init.sh ]
+        then
+          bash scripts/prepublish-init.sh
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+    - name: prepublish
+      shell: bash
+      run: |
+        npm i -g @auditmation/platform-dataloader@latest
+        if npm run | grep -q "nx:prepublish"; then
+          npm run nx:prepublish
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        DYNAMO_DB_TABLE: ${{ env.AWS_DYNAMO_DB_TABLE }}
+        AWS_ACCESS_KEY_ID: ${{ env.AWS_DYNAMO_DB_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ env.AWS_DYNAMO_DB_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ env.AWS_DYNAMO_DB_REGION }}
+        AWS_ENDPOINT: ${{ env.AWS_DYNAMO_DB_ENDPOINT }}
+        EVENT_SOURCE: Memory
+        SCHEDULER_SOURCE: Memory
+    - name: publish
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.publishToken }}
+        READ_TOKEN: ${{ env.READ_TOKEN }}
+      run: |
+        ENCODED=$(npx lerna list --since --json | jq -r '.[].name' | jq -Rr @uri)
+        PACKAGES=$(npx lerna list --since --json --no-progress | grep -v '^lerna' | jq -r '[ .[] | .name ] | join(",")')
+
+        if npm run | grep -q "nx:publish"; then
+          npx lerna version --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
+          npm run nx:publish
+        else
+          npx lerna publish --conventional-commits --conventional-graduate --yes
+        fi
+    - name: Update dist tags
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.publishToken }}
+      run: |
+        PACKAGES=$(npx lerna list --since HEAD~1 --ndjson | jq -c)
+        for package in $(echo $PACKAGES | jq -r -c '.location'); do
+          NAME=$(cat $package/package.json | jq -r '.name')
+          VERSION=$(cat $package/package.json | jq -r '.version')
+        # if [[ "$(npm dist-tag ls $NAME@$VERSION)" == *"dev"* ]]; then npm dist-tag add $NAME@$VERSION dev; fi
+        # if [[ "$(npm dist-tag ls $NAME@$VERSION)" == *"qa"* ]]; then npm dist-tag add $NAME@$VERSION qa; fi
+        # if [[ "$(npm dist-tag ls $NAME@$VERSION)" == *"uat"* ]]; then npm dist-tag add $NAME@$VERSION uat; fi
+        # if [[ "$(npm dist-tag ls $NAME@$VERSION)" == *"rc"* ]]; then npm dist-tag add $NAME@$VERSION rc; fi
+          npm dist-tag add $NAME@$VERSION dev
+          npm dist-tag add $NAME@$VERSION qa
+          npm dist-tag add $NAME@$VERSION uat
+          npm dist-tag add $NAME@$VERSION rc
+        done
+
+    - name: post publish
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.publishToken }}
+        READ_TOKEN: ${{ env.READ_TOKEN }}
+      run: |
+        if [ -x scripts/postpublish.sh ]; then
+          scripts/postpublish.sh
+        fi
+    - name: Release Announcement
+      if: ${{ inputs.skip-publish-announcement != 'true' }}
+      uses: zerobias-org/devops/actions/release-announcement@main

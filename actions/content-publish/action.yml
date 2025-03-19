@@ -110,6 +110,12 @@ runs:
         NPM_TOKEN: ${{ inputs.publishToken }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
       run: |
+        echo '@auditlogic:registry=https://npm.pkg.github.com/' > $HOME/.npmrc
+        echo '@auditmation:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
+        echo '@zerobias-org:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
+        echo '//npm.pkg.github.com/:always-auth=true' >> $HOME/.npmrc
+        echo '//npm.pkg.github.com/:_authToken=${NPM_TOKEN}' >> $HOME/.npmrc
+
         ENCODED=$(npx lerna list --since --json | jq -r '.[].name' | jq -Rr @uri)
         PACKAGES=$(npx lerna list --since --json --no-progress | grep -v '^lerna' | jq -r '[ .[] | .name ] | join(",")')
 

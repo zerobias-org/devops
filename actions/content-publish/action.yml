@@ -64,7 +64,7 @@ runs:
     - name: bootstrap
       shell: bash
       run: |
-        git status
+        echo `git status`
 
         npm ci
         npx lerna bootstrap --since --ci --include-dependencies
@@ -83,7 +83,7 @@ runs:
           bash scripts/prepublish-init.sh
         fi
 
-        git status
+        echo `git status`
 
         echo "prepublish:init complete"
 
@@ -97,7 +97,7 @@ runs:
           npm run nx:prepublish
         fi
 
-        git status
+        echo `git status`
 
         echo "prepublish complete"
 
@@ -119,7 +119,7 @@ runs:
         ENCODED=$(npx lerna list --since --json | jq -r '.[].name' | jq -Rr @uri)
         PACKAGES=$(npx lerna list --since --json --no-progress | grep -v '^lerna' | jq -r '[ .[] | .name ] | join(",")')
 
-        git status
+        echo `git status`
 
         if npm run | grep -q "nx:publish"; then
           npx lerna version --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes

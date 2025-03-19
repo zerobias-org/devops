@@ -116,11 +116,14 @@ runs:
         NPM_TOKEN: ${{ inputs.publishToken }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
       run: |
-        echo '@auditlogic:registry=https://npm.pkg.github.com/' > $HOME/.npmrc
-        echo '@auditmation:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
-        echo '@zerobias-org:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
-        echo '//npm.pkg.github.com/:always-auth=true' >> $HOME/.npmrc
-        echo '//npm.pkg.github.com/:_authToken=${NPM_TOKEN}' >> $HOME/.npmrc
+        rm .npmrc
+
+        echo '@auditlogic:registry=https://npm.pkg.github.com/' > .npmrc
+        echo '@auditmation:registry=https://npm.pkg.github.com/' >> .npmrc
+        echo '@zerobias-org:registry=https://npm.pkg.github.com/' >> .npmrc
+        echo '//npm.pkg.github.com/:always-auth=true' >> .npmrc
+        echo '//npm.pkg.github.com/:_authToken=${NPM_TOKEN}' >> .npmrc
+
 
         ENCODED=$(npx lerna list --since --json | jq -r '.[].name' | jq -Rr @uri)
         PACKAGES=$(npx lerna list --since --json --no-progress | grep -v '^lerna' | jq -r '[ .[] | .name ] | join(",")')
@@ -141,13 +144,14 @@ runs:
       env:
         NPM_TOKEN: ${{ inputs.publishToken }}
       run: |
-        echo '@auditlogic:registry=https://npm.pkg.github.com/' > $HOME/.npmrc
-        echo '@auditmation:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
-        echo '@zerobias-org:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
-        echo '//npm.pkg.github.com/:always-auth=true' >> $HOME/.npmrc
-        echo '//npm.pkg.github.com/:_authToken=${NPM_TOKEN}' >> $HOME/.npmrc
+        rm .npmrc 
+        
+        echo '@auditlogic:registry=https://npm.pkg.github.com/' > .npmrc
+        echo '@auditmation:registry=https://npm.pkg.github.com/' >> .npmrc
+        echo '@zerobias-org:registry=https://npm.pkg.github.com/' >> .npmrc
+        echo '//npm.pkg.github.com/:always-auth=true' >> .npmrc
+        echo '//npm.pkg.github.com/:_authToken=${NPM_TOKEN}' >> .npmrc
 
-        rm .npmrc && cp $HOME/.npmrc .npmrc
 
         PACKAGES=$(npx lerna list --since HEAD~1 --ndjson | jq -c)
         for package in $(echo $PACKAGES | jq -r -c '.location'); do

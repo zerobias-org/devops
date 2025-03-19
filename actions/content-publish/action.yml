@@ -147,6 +147,8 @@ runs:
           echo "home .npmrc"
           cat $HOME/.npmrc
 
+          rm .npmrc && cp $HOME/.npmrc .npmrc
+
           echo "here .npmrc"
           cat .npmrc
           

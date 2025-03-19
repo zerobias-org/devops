@@ -56,7 +56,7 @@ jobs:
         uses: zerobias-org/devops/actions/content-publish@main
         with:
           publishToken: ${{ secrets.GITHUB_TOKEN }}
-          skip_announcement: ${{ inputs.skip-publish-announcement }}
+          skip-publish-announcement: ${{ inputs.skip-publish-announcement }}
 
       - name: Check for scripts/cdnUpdate.sh
         id: cdnUpdateExists

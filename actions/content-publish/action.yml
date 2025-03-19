@@ -67,6 +67,9 @@ runs:
         npm ci
         npx lerna bootstrap --since --ci --include-dependencies
         npx lerna run build --since --include-dependencies
+
+        echo "bootstrap complete"
+        
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         JAVA_OPTS: "-Xms256m -Xmx1024m"
@@ -77,6 +80,9 @@ runs:
         then
           bash scripts/prepublish-init.sh
         fi
+
+        echo "prepublish:init complete"
+
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
     - name: prepublish
@@ -86,6 +92,9 @@ runs:
         if npm run | grep -q "nx:prepublish"; then
           npm run nx:prepublish
         fi
+
+        echo "prepublish complete"
+
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         DYNAMO_DB_TABLE: ${{ env.AWS_DYNAMO_DB_TABLE }}
@@ -101,6 +110,12 @@ runs:
         NPM_TOKEN: ${{ inputs.publishToken }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
       run: |
+        echo '@auditlogic:registry=https://npm.pkg.github.com/' > $HOME/.npmrc
+        echo '@auditmation:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
+        echo '@zerobias-org:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
+        echo '//npm.pkg.github.com/:always-auth=true' >> $HOME/.npmrc
+        echo '//npm.pkg.github.com/:_authToken=${NPM_TOKEN}' >> $HOME/.npmrc
+
         ENCODED=$(npx lerna list --since --json | jq -r '.[].name' | jq -Rr @uri)
         PACKAGES=$(npx lerna list --since --json --no-progress | grep -v '^lerna' | jq -r '[ .[] | .name ] | join(",")')
 
@@ -110,11 +125,20 @@ runs:
         else
           npx lerna publish --conventional-commits --conventional-graduate --yes
         fi
+
+        echo "packages published"
+
     - name: Update dist tags
       shell: bash
       env:
         NPM_TOKEN: ${{ inputs.publishToken }}
       run: |
+        echo '@auditlogic:registry=https://npm.pkg.github.com/' > $HOME/.npmrc
+        echo '@auditmation:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
+        echo '@zerobias-org:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
+        echo '//npm.pkg.github.com/:always-auth=true' >> $HOME/.npmrc
+        echo '//npm.pkg.github.com/:_authToken=${NPM_TOKEN}' >> $HOME/.npmrc
+
         PACKAGES=$(npx lerna list --since HEAD~1 --ndjson | jq -c)
         for package in $(echo $PACKAGES | jq -r -c '.location'); do
           NAME=$(cat $package/package.json | jq -r '.name')
@@ -124,6 +148,8 @@ runs:
           npm dist-tag add $NAME@$VERSION uat
           npm dist-tag add $NAME@$VERSION rc
         done
+
+        echo "dist tags updated"
 
     - name: post publish
       shell: bash

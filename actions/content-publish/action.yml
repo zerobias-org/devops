@@ -139,6 +139,8 @@ runs:
         echo '//npm.pkg.github.com/:always-auth=true' >> $HOME/.npmrc
         echo '//npm.pkg.github.com/:_authToken=${NPM_TOKEN}' >> $HOME/.npmrc
 
+        rm .npmrc && cp $HOME/.npmrc .npmrc
+
         PACKAGES=$(npx lerna list --since HEAD~1 --ndjson | jq -c)
         for package in $(echo $PACKAGES | jq -r -c '.location'); do
           NAME=$(cat $package/package.json | jq -r '.name')

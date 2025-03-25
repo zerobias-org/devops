@@ -58,6 +58,11 @@ jobs:
           publishToken: ${{ secrets.GITHUB_TOKEN }}
           skip-publish-announcement: ${{ inputs.skip-publish-announcement }}
 
+      - name: Update bundle
+        uses: zerobias-org/devops/actions/content-bundle@main
+        with:
+          publishToken: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Check for scripts/cdnUpdate.sh
         id: cdnUpdateExists
         run: |

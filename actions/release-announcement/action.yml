@@ -84,11 +84,11 @@ runs:
       env:
         READ_TOKEN: ${{ env.READ_TOKEN }}
 
-    # - name: Publish Release Event
-    #   uses: zerobias-org/devops/actions/publish-release-event@main
-    #   env:
-    #     PR_ID: ${{ steps.pr.outputs.number }}
-    #     PR_URL: ${{ steps.pr.outputs.pr_url }}
-    #     PR_LABELS: ${{ steps.pr.outputs.pr_labels }}
-    #     PUBLISHED_PKGS_FILE: ./.published_packages
-    #     NPM_TOKEN: ${{ env.READ_TOKEN }}
+    - name: Publish Release Event
+      uses: zerobias-org/devops/actions/publish-release-event@main
+      env:
+        PR_ID: ${{ steps.pr.outputs.number }}
+        PR_URL: ${{ steps.pr.outputs.pr_url }}
+        PR_LABELS: ${{ steps.pr.outputs.pr_labels }}
+        PUBLISHED_PKGS_FILE: ./.published_packages
+        NPM_TOKEN: ${{ env.READ_TOKEN }}

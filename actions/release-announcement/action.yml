@@ -55,6 +55,7 @@ runs:
         printf "SLACK_MESSAGE<<EOF\n%s\nEOF" "$(cat slackmessage)"
         printf "SLACK_MESSAGE<<EOF\n%s\nEOF" "$(cat slackmessage)" >> "$GITHUB_OUTPUT"
       env:
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
 
@@ -82,6 +83,7 @@ runs:
         # echo "packageDirs=$PACKAGE_DIRS" >> $GITHUB_OUTPUT
         echo "$PACKAGE_DIRS" > ./.published_packages
       env:
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
 
     - name: Publish Release Event

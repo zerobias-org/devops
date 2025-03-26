@@ -74,6 +74,7 @@ runs:
 
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
         JAVA_OPTS: "-Xms256m -Xmx1024m"
     - name: prepublish:init
       shell: bash
@@ -89,6 +90,7 @@ runs:
 
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
     - name: prepublish
       shell: bash
       run: |
@@ -103,6 +105,7 @@ runs:
 
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
         DYNAMO_DB_TABLE: ${{ env.AWS_DYNAMO_DB_TABLE }}
         AWS_ACCESS_KEY_ID: ${{ env.AWS_DYNAMO_DB_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ env.AWS_DYNAMO_DB_SECRET_ACCESS_KEY }}
@@ -114,6 +117,7 @@ runs:
       shell: bash
       env:
         NPM_TOKEN: ${{ inputs.publishToken }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
       run: |
         ENCODED=$(npx lerna list --since --json | jq -r '.[].name' | jq -Rr @uri)
@@ -134,6 +138,7 @@ runs:
       shell: bash
       env:
         NPM_TOKEN: ${{ inputs.publishToken }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
         PACKAGES=$(npx lerna list --since HEAD~1 --ndjson | jq -c)
         for package in $(echo $PACKAGES | jq -r -c '.location'); do
@@ -151,11 +156,13 @@ runs:
       shell: bash
       env:
         NPM_TOKEN: ${{ inputs.publishToken }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
       run: |
         if [ -x scripts/postpublish.sh ]; then
           scripts/postpublish.sh
         fi
+
     - name: Release Announcement
       if: ${{ inputs.skip-publish-announcement != 'true' }}
       uses: zerobias-org/devops/actions/release-announcement@main

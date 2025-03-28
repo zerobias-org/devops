@@ -12,4 +12,4 @@ runs:
       run: gh pr edit --add-label "dev"  || echo "dev label already assigned"
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ secrets.PR_TOKEN }}
+        GITHUB_TOKEN: ${{ env.PR_TOKEN }}

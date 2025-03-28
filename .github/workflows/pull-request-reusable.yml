@@ -45,6 +45,8 @@ jobs:
       (github.event.action == 'opened' || github.event.action == 'reopened' || github.event.action == 'ready_for_review')
     steps:
       - uses: zerobias-org/devops/actions/content-pr-opened@main
+        env:
+          PR_TOKEN: ${{ secrets.PR_TOKEN }}
 
   test:
     name: Test

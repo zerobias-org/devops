@@ -94,8 +94,8 @@ runs:
     - name: prepublish
       shell: bash
       run: |
-        npm i -g @auditmation/platform-dataloader@latest
         if npm run | grep -q "nx:prepublish"; then
+          npm i -g @auditmation/platform-dataloader@latest
           npm run nx:prepublish
         fi
 
@@ -120,12 +120,10 @@ runs:
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
       run: |
-        ENCODED=$(npx lerna list --since --json | jq -r '.[].name' | jq -Rr @uri)
-        PACKAGES=$(npx lerna list --since --json --no-progress | grep -v '^lerna' | jq -r '[ .[] | .name ] | join(",")')
-
         echo `git status`
 
         if npm run | grep -q "nx:publish"; then
+          echo "had nx:publish running those"
           npx lerna version --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
           npm run nx:publish
         else

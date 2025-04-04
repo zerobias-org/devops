@@ -47,7 +47,7 @@ jobs:
       && contains(github.event.pull_request.labels.*.name, 'approved')
       && !contains(github.event.pull_request.labels.*.name, 'dev')
     steps:
-      - uses: zerobias-org/devops/actions/content-pr-approved@main
+      - uses: zerobias-org/devops/actions/content-pr-approved@new-workflow-tests
         env:
           PR_TOKEN: ${{ secrets.PR_TOKEN }}
 
@@ -82,7 +82,7 @@ jobs:
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.1'
-      - uses: zerobias-org/devops/actions/content-test@main
+      - uses: zerobias-org/devops/actions/content-test@new-workflow-tests
         with:
           run-integration-tests: ${{ inputs.run-integration-tests }}
 
@@ -105,10 +105,10 @@ jobs:
             && contains(github.event.pull_request.labels.*.name, 'dev')
             && !contains(github.event.pull_request.labels.*.name, 'qa')
             && !contains(github.event.pull_request.labels.*.name, 'uat')
-        uses: zerobias-org/devops/actions/content-pr-publish@main
+        uses: zerobias-org/devops/actions/content-pr-publish@new-workflow-tests
 
       - name: Content Pre-release
-        uses: zerobias-org/devops/actions/content-pre-release@main
+        uses: zerobias-org/devops/actions/content-pre-release@new-workflow-tests
         if: github.event.action == 'labeled'
           && contains(github.event.pull_request.labels.*.name, 'dev')
           && (contains(github.event.pull_request.labels.*.name, 'qa') || contains(github.event.pull_request.labels.*.name, 'uat'))

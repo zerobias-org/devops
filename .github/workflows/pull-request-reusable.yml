@@ -55,7 +55,7 @@ jobs:
     name: Test
     runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
     if: github.event_name == 'pull_request'
-      && github.event.action == 'labeled'
+      && (github.event.action == 'labeled' || github.event.action == 'synchronize')
       && contains(github.event.pull_request.labels.*.name, 'dev')
       && !contains(github.event.pull_request.labels.*.name, 'qa')
       && !contains(github.event.pull_request.labels.*.name, 'uat')

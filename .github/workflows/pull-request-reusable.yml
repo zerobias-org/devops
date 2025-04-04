@@ -56,6 +56,7 @@ jobs:
     runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
     if: github.event_name == 'pull_request'
       && (github.event.action == 'labeled' || github.event.action == 'synchronize')
+      && contains(github.event.pull_request.labels.*.name, 'approved')
       && contains(github.event.pull_request.labels.*.name, 'dev')
       && !contains(github.event.pull_request.labels.*.name, 'qa')
       && !contains(github.event.pull_request.labels.*.name, 'uat')
@@ -96,12 +97,14 @@ jobs:
       && !contains(needs.*.result, 'failure')
       && (
         github.event_name == 'pull_request'
-        && github.event.action == 'labeled'
+        && (github.event.action == 'labeled' || github.event.action == 'synchronize')
+        && contains(github.event.pull_request.labels.*.name, 'approved')
         && contains(github.event.pull_request.labels.*.name, 'dev'))
     steps:
       - name: Content PR Publish
         if: github.event_name == 'pull_request'
-            && github.event.action == 'labeled'
+            && (github.event.action == 'labeled' || github.event.action == 'synchronize')
+            && contains(github.event.pull_request.labels.*.name, 'approved')
             && contains(github.event.pull_request.labels.*.name, 'dev')
             && !contains(github.event.pull_request.labels.*.name, 'qa')
             && !contains(github.event.pull_request.labels.*.name, 'uat')
@@ -109,7 +112,8 @@ jobs:
 
       - name: Content Pre-release
         uses: zerobias-org/devops/actions/content-pre-release@new-workflow-tests
-        if: github.event.action == 'labeled'
+        if: (github.event.action == 'labeled' || github.event.action == 'synchronize')
+          && contains(github.event.pull_request.labels.*.name, 'approved')
           && contains(github.event.pull_request.labels.*.name, 'dev')
           && (contains(github.event.pull_request.labels.*.name, 'qa') || contains(github.event.pull_request.labels.*.name, 'uat'))
         with:

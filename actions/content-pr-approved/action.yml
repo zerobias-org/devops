@@ -1,5 +1,5 @@
-name: 'Content PR Opened'
-description: 'Runs when a content pr is opened or marked as ready for review to apply the `dev` label if it is not in draft.'
+name: 'Content PR Approved'
+description: 'Runs when a content pr is labelled approved and does not have a `dev` label.'
 runs:
   using: "composite"
   steps:

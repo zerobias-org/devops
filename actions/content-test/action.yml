@@ -21,6 +21,18 @@ runs:
         fetch-depth: 0
         ref: ${{ github.head_ref }}
 
+    - name: Get changed files
+      id: changed-files
+      uses: tj-actions/changed-files@6cb76d07bee4c9772c6882c06c37837bf82a04d3 # v46
+
+    - name: List all changed files
+      env:
+        ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+      run: |
+        for file in ${ALL_CHANGED_FILES}; do
+          echo "$file was changed"
+        done
+
     - uses: zerobias-org/devops/actions/setup-node@main
 
     - name: install tooling
@@ -65,6 +77,19 @@ runs:
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         JAVA_OPTS: "-Xms256m -Xmx1024m"
+
+    - name: test:validate
+      if: github.ref != 'refs/heads/main'
+      shell: bash
+      run: |
+        if npm run | grep -q "validate"; then
+          if [ -x scripts/validate.sh ]
+          then
+            npm run validate
+          fi
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
 
     # Need at at least a file in there as download action will fail if no artifact found
     # upload does not upload empty folders

@@ -38,25 +38,27 @@ env:
   USERNAME: ${{ secrets.USERNAME }}
 
 jobs:
-  pr-opened:
+  # When a PR is labeled with approved, we will run this job
+  pr-approved:
     name: PR Opened
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' &&
-      (github.event.action == 'opened' || github.event.action == 'reopened' || github.event.action == 'ready_for_review')
+    if: github.event_name == 'pull_request'
+      && github.event.action == 'labeled'
+      && contains(github.event.pull_request.labels.*.name, 'approved')
+      && !contains(github.event.pull_request.labels.*.name, 'dev')
     steps:
-      - uses: zerobias-org/devops/actions/content-pr-opened@main
+      - uses: zerobias-org/devops/actions/content-pr-approved@main
         env:
           PR_TOKEN: ${{ secrets.PR_TOKEN }}
 
   test:
     name: Test
     runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
-    if: github.event_name == 'pull_request' &&
-      (github.event.action == 'synchronize' ||
-      (github.event.action == 'labeled'
+    if: github.event_name == 'pull_request'
+      && github.event.action == 'labeled'
       && contains(github.event.pull_request.labels.*.name, 'dev')
       && !contains(github.event.pull_request.labels.*.name, 'qa')
-      && !contains(github.event.pull_request.labels.*.name, 'uat')))
+      && !contains(github.event.pull_request.labels.*.name, 'uat')
 
     services:
       postgres:
@@ -89,21 +91,20 @@ jobs:
     name: Publish Pre-release
     needs: test
     if: |
-      always() &&
-      !cancelled() &&
-      !contains(needs.*.result, 'failure') &&
-      (github.event_name == 'pull_request' &&
-      (github.event.action == 'synchronize' ||
-      (github.event.action == 'labeled') &&
-      (contains(github.event.pull_request.labels.*.name, 'dev'))))
+      always()
+      && !cancelled()
+      && !contains(needs.*.result, 'failure')
+      && (
+        github.event_name == 'pull_request'
+        && github.event.action == 'labeled'
+        && contains(github.event.pull_request.labels.*.name, 'dev'))
     steps:
       - name: Content PR Publish
-        if: github.event_name == 'pull_request' &&
-          (github.event.action == 'synchronize' ||
-          (github.event.action == 'labeled'
-          && contains(github.event.pull_request.labels.*.name, 'dev')
-          && !contains(github.event.pull_request.labels.*.name, 'qa')
-          && !contains(github.event.pull_request.labels.*.name, 'uat')))
+        if: github.event_name == 'pull_request'
+            && github.event.action == 'labeled'
+            && contains(github.event.pull_request.labels.*.name, 'dev')
+            && !contains(github.event.pull_request.labels.*.name, 'qa')
+            && !contains(github.event.pull_request.labels.*.name, 'uat')
         uses: zerobias-org/devops/actions/content-pr-publish@main
 
       - name: Content Pre-release

@@ -31,7 +31,10 @@ runs:
         ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
       run: |
         for file in ${ALL_CHANGED_FILES}; do
-          echo "$file was changed"
+          if [[ ! "$file" == "package/"* ]]; then
+            echo "Some file outside of the package/ directory was changed, this is not supported"
+            exit 1
+          fi
         done
 
     - uses: zerobias-org/devops/actions/setup-node@main

@@ -40,7 +40,7 @@ env:
 jobs:
   # When a PR is labeled with approved, we will run this job
   pr-approved:
-    name: PR Opened
+    name: PR Approved
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
       && github.event.action == 'labeled'

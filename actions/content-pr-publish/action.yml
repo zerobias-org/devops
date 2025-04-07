@@ -45,7 +45,6 @@ runs:
       shell: bash
       run: |
         cp .npmrc $HOME/.npmrc
-        echo -e git log --oneline -n 10
         npm ci
         npx lerna bootstrap --since --ci --include-dependencies
         npx lerna run build --since --include-dependencies

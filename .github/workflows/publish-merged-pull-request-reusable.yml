@@ -1,0 +1,130 @@
+name: Publish Merged Pull Request Reusable
+
+on:
+  workflow_call:
+    inputs:
+      run-integration-tests:
+        required: false
+        default: 'true'
+        type: string
+
+env:
+  PGHOST: localhost
+  PGPORT: 15432
+  PGUSER: postgres
+  PGPASSWORD: postgres
+  PGDATABASE: nfa_test
+  SU_USER: postgres
+  SU_PASSWORD: postgres
+  SU_DB: postgres
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  AWS_DYNAMO_DB_TABLE: nfa-test
+  AWS_DYNAMO_DB_ACCESS_KEY_ID: DUMMYIDEXAMPLE
+  AWS_DYNAMO_DB_SECRET_ACCESS_KEY: DUMMYEXAMPLEKEY
+  AWS_DYNAMO_DB_REGION: us-west-2
+  AWS_DYNAMO_DB_ENDPOINT: http://localhost:18000
+  EVENT_SOURCE: Memory
+  SCHEDULER_SOURCE: Memory
+  PR_TOKEN: ${{ secrets.PR_TOKEN }}
+  READ_TOKEN: ${{ secrets.READ_TOKEN }}
+  WRITE_TOKEN: ${{ secrets.WRITE_TOKEN }}
+  SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
+  SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+  ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
+  DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+  AWS_PUBLISHING_ROLE: ${{ secrets.AWS_PUBLISHING_ROLE }}
+  AWS_PUBLISHING_REGION: ${{ secrets.AWS_PUBLISHING_REGION }}
+  USERNAME: ${{ secrets.USERNAME }}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
+
+    services:
+      postgres:
+        image: supabase/postgres:14.1.0
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 15432:5432
+
+      dynamodb:
+        image: amazon/dynamodb-local
+        ports:
+          - 18000:8000
+
+    steps:
+      - name: Ruby Setup
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+      - name: Run Tests
+        uses: zerobias-org/devops/actions/content-test@main
+        with:
+          run-integration-tests: ${{ inputs.run-integration-tests }}
+
+  publish-pre-release:
+    runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
+    name: Publish Pre-release
+    needs: test
+    if: |
+      always()
+      && !cancelled()
+      && !contains(needs.*.result, 'failure')
+    steps:
+      - name: Content PR Publish
+        uses: zerobias-org/devops/actions/content-pr-publish@main
+
+      - name: Check for scripts/cdnUpdate.sh
+        id: cdnUpdateExists
+        run: |
+          if [ -x scripts/cdnUpdate.sh ]; then
+            echo "cdnUpdateExists=true"
+            echo "cdnUpdateExists=true" >> $GITHUB_OUTPUT
+          else
+            echo "cdnUpdateExists=false"
+            echo "cdnUpdateExists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        with:
+          hugo-version: '0.110.0'
+          extended: true
+
+      - name: configure aws tools creds
+        uses: aws-actions/configure-aws-credentials@v1
+        if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        with:
+          role-to-assume: ${{ env.AWS_PUBLISHING_ROLE }}
+          role-session-name: ${{ github.event.repository.name }}
+          aws-region: ${{ env.AWS_PUBLISHING_REGION }}
+
+      - name: CDN Update
+        if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        run: |
+          if [ -x scripts/cdnUpdate.sh ]; then
+            ./scripts/cdnUpdate.sh
+          fi
+        env:
+          NPM_TOKEN: ${{ secrets.READ_TOKEN }}
+          SINCE: HEAD~1
+
+      - name: Slack Notification
+        uses: rtCamp/action-slack-notify@master
+        if: failure()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+          SLACK_ICON_EMOJI: ':fire'
+          MSG_MINIMAL: 'true'
+          SLACK_TITLE: ':fire: ${{ github.repository }} cdn update failed'
+          SLACK_MESSAGE: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+          SLACK_COLOR: danger

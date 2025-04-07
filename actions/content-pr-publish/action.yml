@@ -12,6 +12,7 @@ runs:
     - name: check out code
       uses: actions/checkout@v4
       with:
+        repository: ${{ github.event.pull_request.head.repo.full_name }}
         fetch-depth: 0
         ref: ${{ github.head_ref }}
 
@@ -42,6 +43,8 @@ runs:
     - name: bootstrap
       shell: bash
       run: |
+        cp .npmrc $HOME/.npmrc
+        echo -e git history
         npm ci
         npx lerna bootstrap --since --ci --include-dependencies
         npx lerna run build --since --include-dependencies

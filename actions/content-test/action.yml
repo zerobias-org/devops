@@ -46,7 +46,6 @@ runs:
     - name: install tooling
       shell: bash
       run: |
-        exit 1
         if ! command -v sem-apply &> /dev/null
         then
           gem install schema-evolution-manager

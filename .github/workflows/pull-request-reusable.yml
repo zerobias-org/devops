@@ -47,7 +47,7 @@ jobs:
       && contains(github.event.pull_request.labels.*.name, 'approved')
       && !contains(github.event.pull_request.labels.*.name, 'dev')
     steps:
-      - uses: zerobias-org/devops/actions/content-pr-approved@new-workflow-tests
+      - uses: zerobias-org/devops/actions/content-pr-approved@main
         env:
           PR_TOKEN: ${{ secrets.PR_TOKEN }}
 
@@ -86,12 +86,12 @@ jobs:
           ruby-version: '3.1'
       - name: Run Tests
         if: (!contains(github.event.pull_request.labels.*.name, 'forked'))
-        uses: zerobias-org/devops/actions/content-test@new-workflow-tests
+        uses: zerobias-org/devops/actions/content-test@main
         with:
           run-integration-tests: ${{ inputs.run-integration-tests }}
       - name: Run Forked Tests
         if: contains(github.event.pull_request.labels.*.name, 'forked')
-        uses: zerobias-org/devops/actions/content-test@new-workflow-tests
+        uses: zerobias-org/devops/actions/content-test@main
         with:
           run-integration-tests: ${{ inputs.run-integration-tests }}
 
@@ -116,18 +116,7 @@ jobs:
             && contains(github.event.pull_request.labels.*.name, 'dev')
             && !contains(github.event.pull_request.labels.*.name, 'qa')
             && !contains(github.event.pull_request.labels.*.name, 'uat')
-        uses: zerobias-org/devops/actions/content-pr-publish@new-workflow-tests
-
-      - name: Content Pre-release
-        if: (github.event.action == 'labeled' || github.event.action == 'synchronize')
-          && contains(github.event.pull_request.labels.*.name, 'approved')
-          && contains(github.event.pull_request.labels.*.name, 'dev')
-          && (contains(github.event.pull_request.labels.*.name, 'qa') || contains(github.event.pull_request.labels.*.name, 'uat'))
-        uses: zerobias-org/devops/actions/content-pre-release@new-workflow-tests
-        with:
-          qaAssignee: dsimonca
-          uatAssignee: dsimonca
-          since: origin/${{ github.base_ref }}
+        uses: zerobias-org/devops/actions/content-pr-publish@main
 
       - name: Check for scripts/cdnUpdate.sh
         id: cdnUpdateExists

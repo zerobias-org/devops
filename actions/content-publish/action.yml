@@ -66,6 +66,7 @@ runs:
       run: |
         echo `git status`
 
+        cp .npmrc $HOME/.npmrc
         npm ci
         npx lerna bootstrap --since --ci --include-dependencies
         npx lerna run build --since --include-dependencies

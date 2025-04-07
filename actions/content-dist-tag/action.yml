@@ -16,7 +16,7 @@ runs:
 
     - name: Apply dev tag
       shell: bash
-      if: github.head_ref == 'dev'
+      if: github.ref_name == 'dev'
       env:
         NPM_TOKEN: ${{ env.WRITE_TOKEN }}
       run: |
@@ -30,7 +30,7 @@ runs:
 
     - name: Remove dev tag
       shell: bash
-      if: github.head_ref == 'qa'
+      if: github.ref_name == 'qa'
       env:
         NPM_TOKEN: ${{ env.WRITE_TOKEN }}
       run: |
@@ -45,7 +45,7 @@ runs:
 
     - name: Apply qa tag
       shell: bash
-      if: github.head_ref == 'qa'
+      if: github.ref_name == 'qa'
       env:
         NPM_TOKEN: ${{ env.WRITE_TOKEN }}
       run: |
@@ -59,7 +59,7 @@ runs:
 
     - name: Remove qa tag
       shell: bash
-      if: github.head_ref == 'dev'
+      if: github.ref_name == 'dev'
       env:
         NPM_TOKEN: ${{ env.WRITE_TOKEN }}
       run: |

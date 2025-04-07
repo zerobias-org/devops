@@ -42,7 +42,7 @@ jobs:
   pr-approved:
     name: PR Approved
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
       && github.event.action == 'labeled'
       && contains(github.event.pull_request.labels.*.name, 'approved')
       && !contains(github.event.pull_request.labels.*.name, 'dev')
@@ -54,7 +54,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
-    if: github.event_name == 'pull_request'
+    if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
       && (github.event.action == 'labeled' || github.event.action == 'synchronize')
       && contains(github.event.pull_request.labels.*.name, 'approved')
       && contains(github.event.pull_request.labels.*.name, 'dev')
@@ -80,10 +80,18 @@ jobs:
           - 18000:8000
 
     steps:
-      - uses: ruby/setup-ruby@v1
+      - name: Ruby Setup
+        uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.1'
-      - uses: zerobias-org/devops/actions/content-test@new-workflow-tests
+      - name: Run Tests
+        if: (!contains(github.event.pull_request.labels.*.name, 'forked'))
+        uses: zerobias-org/devops/actions/content-test@new-workflow-tests
+        with:
+          run-integration-tests: ${{ inputs.run-integration-tests }}
+      - name: Run Forked Tests
+        if: contains(github.event.pull_request.labels.*.name, 'forked')
+        uses: zerobias-org/devops/actions/content-test@new-workflow-tests
         with:
           run-integration-tests: ${{ inputs.run-integration-tests }}
 
@@ -96,13 +104,13 @@ jobs:
       && !cancelled()
       && !contains(needs.*.result, 'failure')
       && (
-        github.event_name == 'pull_request'
+        (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
         && (github.event.action == 'labeled' || github.event.action == 'synchronize')
         && contains(github.event.pull_request.labels.*.name, 'approved')
         && contains(github.event.pull_request.labels.*.name, 'dev'))
     steps:
       - name: Content PR Publish
-        if: github.event_name == 'pull_request'
+        if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
             && (github.event.action == 'labeled' || github.event.action == 'synchronize')
             && contains(github.event.pull_request.labels.*.name, 'approved')
             && contains(github.event.pull_request.labels.*.name, 'dev')
@@ -111,11 +119,11 @@ jobs:
         uses: zerobias-org/devops/actions/content-pr-publish@new-workflow-tests
 
       - name: Content Pre-release
-        uses: zerobias-org/devops/actions/content-pre-release@new-workflow-tests
         if: (github.event.action == 'labeled' || github.event.action == 'synchronize')
           && contains(github.event.pull_request.labels.*.name, 'approved')
           && contains(github.event.pull_request.labels.*.name, 'dev')
           && (contains(github.event.pull_request.labels.*.name, 'qa') || contains(github.event.pull_request.labels.*.name, 'uat'))
+        uses: zerobias-org/devops/actions/content-pre-release@new-workflow-tests
         with:
           qaAssignee: dsimonca
           uatAssignee: dsimonca

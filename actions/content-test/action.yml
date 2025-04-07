@@ -59,8 +59,8 @@ runs:
     - name: bootstrap
       shell: bash
       run: |
-        echo -e ${{ github.head_ref }}
-        echo -e "${{ github.head_ref }}"
+        echo -e ${{ github.ref_name }}
+        echo -e "${{ github.ref_name }}"
         cp .npmrc $HOME/.npmrc
         npm ci
         npx lerna bootstrap --since --ci --include-dependencies

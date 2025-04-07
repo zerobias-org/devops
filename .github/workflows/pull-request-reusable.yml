@@ -43,9 +43,6 @@ jobs:
     runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
     if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
       && (github.event.action == 'labeled' || github.event.action == 'synchronize')
-      && contains(github.event.pull_request.labels.*.name, 'dev')
-      && !contains(github.event.pull_request.labels.*.name, 'qa')
-      && !contains(github.event.pull_request.labels.*.name, 'uat')
 
     services:
       postgres:
@@ -85,15 +82,11 @@ jobs:
       && !contains(needs.*.result, 'failure')
       && (
         (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
-        && (github.event.action == 'labeled' || github.event.action == 'synchronize')
-        && contains(github.event.pull_request.labels.*.name, 'dev'))
+        && (github.event.action == 'labeled' || github.event.action == 'synchronize'))
     steps:
       - name: Content PR Publish
         if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
-            && (github.event.action == 'labeled' || github.event.action == 'synchronize')
-            && contains(github.event.pull_request.labels.*.name, 'dev')
-            && !contains(github.event.pull_request.labels.*.name, 'qa')
-            && !contains(github.event.pull_request.labels.*.name, 'uat')
+          && (github.event.action == 'labeled' || github.event.action == 'synchronize')
         uses: zerobias-org/devops/actions/content-pr-publish@main
 
       - name: Check for scripts/cdnUpdate.sh

@@ -12,11 +12,12 @@ runs:
     - name: check out code
       uses: actions/checkout@v4
       with:
-        repository: ${{ github.event.pull_request.head.repo.full_name }}
         fetch-depth: 0
         ref: ${{ github.head_ref }}
 
-    - uses: zerobias-org/devops/actions/setup-node@main
+    - name: Setup node
+      uses: zerobias-org/devops/actions/setup-node@main
+
     - name: Setup Hugo
       uses: peaceiris/actions-hugo@v2
       with:
@@ -68,8 +69,6 @@ runs:
     - name: Content Pre-release
       uses: zerobias-org/devops/actions/content-pre-release@main
       with: 
-        qaAssignee: dsimonca
-        uatAssignee: dsimonca
         since: HEAD~1
 
     - name: Post PR Publish

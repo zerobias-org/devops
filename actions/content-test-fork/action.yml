@@ -1,5 +1,5 @@
-name: 'Content Test'
-description: 'Runs to test zerobias-org content packages'
+name: 'Content Test Fork'
+description: 'Runs to test zerobias-org content packages from a fork'
 inputs:
   run-integration-tests:
     description: 'Set to true to run the integrationTest.sh script'
@@ -18,10 +18,29 @@ runs:
     - name: check out code
       uses: actions/checkout@v4
       with:
+        repository: ${{ github.event.pull_request.head.repo.full_name }}
         fetch-depth: 0
         ref: ${{ github.head_ref }}
 
-    - name: setup node
+    # These two steps will only run if forked label exists on PR
+    - name: Get changed files
+      id: changed-files
+      uses: tj-actions/changed-files@6cb76d07bee4c9772c6882c06c37837bf82a04d3 # v46
+
+    #  Fail workflow if forked PR has modifies another other than the package dir
+    - name: List all changed files
+      shell: bash
+      env:
+        ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+      run: |
+        for file in ${ALL_CHANGED_FILES}; do
+          if [[ ! "$file" == "package/"* ]]; then
+            echo "Some file outside of the package/ directory was changed, this is not supported"
+            exit 1
+          fi
+        done
+
+    - name: Setup node
       uses: zerobias-org/devops/actions/setup-node@main
 
     - name: install tooling
@@ -60,7 +79,6 @@ runs:
       shell: bash
       run: |
         cp .npmrc $HOME/.npmrc
-        echo -e git log --oneline -n 10
         npm ci
         npx lerna bootstrap --since --ci --include-dependencies
         npx lerna run build --since --include-dependencies

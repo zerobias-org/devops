@@ -16,7 +16,7 @@ runs:
 
     - name: Apply dev tag
       shell: bash
-      if: contains(steps.pr.outputs.pr_labels, 'dev')
+      if: github.head_ref == 'dev'
       env:
         NPM_TOKEN: ${{ env.WRITE_TOKEN }}
       run: |
@@ -30,7 +30,7 @@ runs:
 
     - name: Remove dev tag
       shell: bash
-      if: ${{ ! contains(steps.pr.outputs.pr_labels, 'dev') }}
+      if: github.head_ref == 'qa'
       env:
         NPM_TOKEN: ${{ env.WRITE_TOKEN }}
       run: |
@@ -42,9 +42,10 @@ runs:
           npm dist-tag rm $NAME@$VERSION dev || echo 'dev tag not present'
         done
 
+
     - name: Apply qa tag
       shell: bash
-      if: contains(steps.pr.outputs.pr_labels, 'qa')
+      if: github.head_ref == 'qa'
       env:
         NPM_TOKEN: ${{ env.WRITE_TOKEN }}
       run: |
@@ -54,11 +55,11 @@ runs:
           VERSION=$(cat $package/package.json | jq -r '.version')
           echo "Applying qa tag to $NAME@$VERSION"
           npm dist-tag add $NAME@$VERSION qa
-        done
-        
+        done        
+
     - name: Remove qa tag
       shell: bash
-      if: ${{ ! contains(steps.pr.outputs.pr_labels, 'qa') }}
+      if: github.head_ref == 'dev'
       env:
         NPM_TOKEN: ${{ env.WRITE_TOKEN }}
       run: |
@@ -68,34 +69,6 @@ runs:
           VERSION=$(cat $package/package.json | jq -r '.version')
           echo "Removing qa tag to $NAME@$VERSION"
           npm dist-tag rm $NAME@$VERSION qa || echo 'qa tag not present'
-        done
-
-    - name: Apply uat tag
-      shell: bash
-      if: contains(steps.pr.outputs.pr_labels, 'uat')
-      env:
-        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
-      run: |
-        PACKAGES=$(npx lerna list --since ${{ inputs.since }} --ndjson | jq -c)
-        for package in $(echo $PACKAGES | jq -r -c '.location'); do
-          NAME=$(cat $package/package.json | jq -r '.name')
-          VERSION=$(cat $package/package.json | jq -r '.version')
-          echo "Applying uat tag to $NAME@$VERSION"
-          npm dist-tag add $NAME@$VERSION uat
-        done
-
-    - name: Remove uat tag
-      shell: bash
-      if: ${{ ! contains(steps.pr.outputs.pr_labels, 'uat') }}
-      env:
-        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
-      run: |
-        PACKAGES=$(npx lerna list --since ${{ inputs.since }} --ndjson | jq -c)
-        for package in $(echo $PACKAGES | jq -r -c '.location'); do
-          NAME=$(cat $package/package.json | jq -r '.name')
-          VERSION=$(cat $package/package.json | jq -r '.version')
-          echo "Removing uat tag to $NAME@$VERSION"
-          npm dist-tag rm $NAME@$VERSION uat || echo 'uat tag not present'
         done
 
     - name: Add skip-dataloader tag

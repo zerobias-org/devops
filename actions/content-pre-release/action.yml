@@ -5,14 +5,6 @@ inputs:
     description: 'The ref to compare to determine what has released'
     required: false
     default: 'origin/main'
-  qaAssignee:
-    description: 'Who to assign this PR on transition to qa'
-    required: false
-    default: 'dsimonca'
-  uatAssignee:
-    description: 'Who to assign this PR on transition to uat'
-    required: false
-    default: 'dsimonca'
 runs:
   using: 'composite'
   steps:
@@ -34,30 +26,6 @@ runs:
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
 
-    - name: Assign to Dan
-      shell: bash
-      if: |
-        contains(github.event.pull_request.labels.*.name, 'dev') &&
-        contains(github.event.pull_request.labels.*.name, 'qa') &&
-        !contains(github.event.pull_request.labels.*.name, 'uat')
-      run: |
-        gh pr edit --remove-assignee ${{ inputs.uatAssignee }}
-        gh pr edit --add-assignee ${{ inputs.qaAssignee }}
-      env:
-        GITHUB_TOKEN: ${{ env.PR_TOKEN }}
-
-    - name: Assign to Dan
-      shell: bash
-      if: |
-        contains(github.event.pull_request.labels.*.name, 'dev') &&
-        contains(github.event.pull_request.labels.*.name, 'qa') &&
-        contains(github.event.pull_request.labels.*.name, 'uat')
-      run: |
-        gh pr edit --remove-assignee ${{ inputs.qaAssignee }}
-        gh pr edit --add-assignee ${{ inputs.uatAssignee }}
-      env:
-        GITHUB_TOKEN: ${{ env.PR_TOKEN }}
-
     - name: Set dist-tags
       uses: zerobias-org/devops/actions/content-dist-tag@main
       with:
@@ -66,9 +34,6 @@ runs:
     # Run only if just a tag workflow not a publish
     - name: Post Pre Release
       shell: bash
-      if: |
-        contains(github.event.pull_request.labels.*.name, 'dev') &&
-        contains(github.event.pull_request.labels.*.name, 'qa')
       run: |
         if [ -x scripts/postprerelease.sh ]
         then

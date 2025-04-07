@@ -12,12 +12,3 @@ runs:
       uses: actions/setup-node@v3
       with:
         node-version-file: '.nvmrc'
-
-    - name: setup npmrc
-      shell: bash
-      run: |
-        echo '@auditlogic:registry=https://npm.pkg.github.com/' > $HOME/.npmrc
-        echo '@auditmation:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
-        echo '@zerobias-org:registry=https://npm.pkg.github.com/' >> $HOME/.npmrc
-        echo '//npm.pkg.github.com/:always-auth=true' >> $HOME/.npmrc
-        echo '//npm.pkg.github.com/:_authToken=${NPM_TOKEN}' >> $HOME/.npmrc

@@ -22,13 +22,6 @@ runs:
         hugo-version: '0.110.0'
         extended: true
 
-    - name: reset pr labels
-      shell: bash
-      run: |
-        gh pr edit --remove-label qa || echo "No qa label"
-        gh pr edit --remove-label uat || echo "No uat label"
-      env:
-        GITHUB_TOKEN: ${{ env.PR_TOKEN }}
     - name: configure git user
       shell: bash
       run: |

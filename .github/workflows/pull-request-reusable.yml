@@ -38,25 +38,11 @@ env:
   USERNAME: ${{ secrets.USERNAME }}
 
 jobs:
-  # When a PR is labeled with approved, we will run this job
-  pr-approved:
-    name: PR Approved
-    runs-on: ubuntu-latest
-    if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
-      && github.event.action == 'labeled'
-      && contains(github.event.pull_request.labels.*.name, 'approved')
-      && !contains(github.event.pull_request.labels.*.name, 'dev')
-    steps:
-      - uses: zerobias-org/devops/actions/content-pr-approved@main
-        env:
-          PR_TOKEN: ${{ secrets.PR_TOKEN }}
-
   test:
     name: Test
     runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
     if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
       && (github.event.action == 'labeled' || github.event.action == 'synchronize')
-      && contains(github.event.pull_request.labels.*.name, 'approved')
       && contains(github.event.pull_request.labels.*.name, 'dev')
       && !contains(github.event.pull_request.labels.*.name, 'qa')
       && !contains(github.event.pull_request.labels.*.name, 'uat')
@@ -100,13 +86,11 @@ jobs:
       && (
         (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
         && (github.event.action == 'labeled' || github.event.action == 'synchronize')
-        && contains(github.event.pull_request.labels.*.name, 'approved')
         && contains(github.event.pull_request.labels.*.name, 'dev'))
     steps:
       - name: Content PR Publish
         if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
             && (github.event.action == 'labeled' || github.event.action == 'synchronize')
-            && contains(github.event.pull_request.labels.*.name, 'approved')
             && contains(github.event.pull_request.labels.*.name, 'dev')
             && !contains(github.event.pull_request.labels.*.name, 'qa')
             && !contains(github.event.pull_request.labels.*.name, 'uat')

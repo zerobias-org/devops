@@ -91,7 +91,7 @@ runs:
       shell: bash
       run: |
         if npm run | grep -q "validate"; then
-          if [ -x scripts/validate.sh ]
+          if [ -x scripts/validate.ts ]
           then
             npm run validate
           fi

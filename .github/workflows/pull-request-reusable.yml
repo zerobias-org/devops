@@ -85,12 +85,6 @@ jobs:
         with:
           ruby-version: '3.1'
       - name: Run Tests
-        if: (!contains(github.event.pull_request.labels.*.name, 'forked'))
-        uses: zerobias-org/devops/actions/content-test@main
-        with:
-          run-integration-tests: ${{ inputs.run-integration-tests }}
-      - name: Run Forked Tests
-        if: contains(github.event.pull_request.labels.*.name, 'forked')
         uses: zerobias-org/devops/actions/content-test@main
         with:
           run-integration-tests: ${{ inputs.run-integration-tests }}

@@ -21,11 +21,15 @@ runs:
         fetch-depth: 0
         ref: ${{ github.head_ref }}
 
+    # These two steps will only run if forked label exists on PR
     - name: Get changed files
+      if: contains(github.event.pull_request.labels.*.name, 'forked')
       id: changed-files
       uses: tj-actions/changed-files@6cb76d07bee4c9772c6882c06c37837bf82a04d3 # v46
 
+    #  Fail workflow if forked PR has modifies another other than the package dir
     - name: List all changed files
+      if: contains(github.event.pull_request.labels.*.name, 'forked')
       shell: bash
       env:
         ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}

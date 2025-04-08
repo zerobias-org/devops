@@ -9,12 +9,6 @@ runs:
   using: "composite"
   steps:
     - name: check out code
-      uses: actions/cache@v4
-      with:
-        path: .git
-        key: ${{ github.repository }}-git-folder
-
-    - name: check out code
       uses: actions/checkout@v4
       with:
         fetch-depth: 0

@@ -95,9 +95,9 @@ runs:
     - name: prepublish
       shell: bash
       run: |
-        if npm run | grep -q "nx:prepublish"; then
+        if npm run | grep -q "prepublish"; then
           npm i -g @auditmation/platform-dataloader@latest
-          npm run nx:prepublish
+          npm run prepublish
         fi
 
         echo `git status`

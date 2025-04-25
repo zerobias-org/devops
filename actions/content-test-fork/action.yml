@@ -80,7 +80,7 @@ runs:
       run: |
         cp .npmrc $HOME/.npmrc
         npm ci
-        npm install -ws
+        npx lerna bootstrap --since --ci --include-dependencies
         npx lerna run build --since --include-dependencies
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}

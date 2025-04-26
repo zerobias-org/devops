@@ -22,7 +22,6 @@ runs:
       run: |
         PACKAGES=$(npx lerna list --since ${{ inputs.since }} --ndjson | jq -c)
         for package in $(echo $PACKAGES); do
-          echo "$package"
           NAME=$(echo $package | jq -r '.name')
           VERSION=$(echo $package | jq -r '.version')
           echo "Applying dev tag to $NAME@$VERSION"

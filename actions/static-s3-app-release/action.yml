@@ -13,6 +13,15 @@ inputs:
   role-to-assume:
     description: 'ARN of the AWS IAM role to assume via OIDC'
     required: true
+  app-base-path:
+    description: 'Base path where applications are located (default: ".")'
+    required: false
+    default: '.'
+  bucket-prefix:
+    description: 'Optional prefix inside the S3 bucket (default: none)'
+    required: false
+    default: ''
+
 runs:
   using: "composite"
   steps:
@@ -24,13 +33,23 @@ runs:
       with:
         node-version-file: '.nvmrc'
 
+    - name: Set working path
+      id: set-path
+      run: |
+        echo "APP_PATH=${{ inputs.app-base-path }}/${{ inputs.app-name }}" >> $GITHUB_ENV
+        if [ -n "${{ inputs.bucket-prefix }}" ]; then
+          echo "BUCKET_PATH=${{ inputs.bucket-prefix }}/${{ inputs.app-name }}" >> $GITHUB_ENV
+        else
+          echo "BUCKET_PATH=${{ inputs.app-name }}" >> $GITHUB_ENV
+        fi
+
     - name: Install dependencies
       run: npm ci
-      working-directory: ${{ inputs.app-name }}
+      working-directory: ${{ env.APP_PATH }}
 
     - name: Build application
       run: npm run build
-      working-directory: ${{ inputs.app-name }}
+      working-directory: ${{ env.APP_PATH }}
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -40,4 +59,4 @@ runs:
 
     - name: Sync to S3
       run: |
-        aws s3 sync ${{ inputs.app-name }}/dist s3://${{ inputs.s3-bucket }}/${{ inputs.app-name }} --delete
+        aws s3 sync ${{ env.APP_PATH }}/dist s3://${{ inputs.s3-bucket }}/${{ env.BUCKET_PATH }} --delete

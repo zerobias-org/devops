@@ -57,6 +57,6 @@ runs:
         role-to-assume: ${{ inputs.role-to-assume }}
         aws-region: ${{ inputs.aws-region }}
 
-    - name: Sync to S3
-      run: |
-        aws s3 sync ${{ env.APP_PATH }}/dist s3://${{ inputs.s3-bucket }}/${{ env.BUCKET_PATH }} --delete
+#    - name: Sync to S3
+#      run: |
+#        aws s3 sync ${{ env.APP_PATH }}/dist s3://${{ inputs.s3-bucket }}/${{ env.BUCKET_PATH }} --delete

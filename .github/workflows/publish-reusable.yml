@@ -71,6 +71,7 @@ jobs:
 
       - name: Check for scripts/cdnUpdate.sh
         id: cdnUpdateExists
+        shell: bash
         run: |
           if [ -x scripts/cdnUpdate.sh ]; then
             echo "cdnUpdateExists=true"
@@ -97,6 +98,7 @@ jobs:
 
       - name: CDN Update
         if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        shell: bash
         run: |
           if [ -x scripts/cdnUpdate.sh ]; then
             ./scripts/cdnUpdate.sh

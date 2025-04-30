@@ -35,6 +35,7 @@ runs:
 
     - name: Set working path
       id: set-path
+      shell: bash
       run: |
         echo "APP_PATH=${{ inputs.app-base-path }}/${{ inputs.app-name }}" >> $GITHUB_ENV
         if [ -n "${{ inputs.bucket-prefix }}" ]; then
@@ -44,10 +45,12 @@ runs:
         fi
 
     - name: Install dependencies
+      shell: bash
       run: npm ci
       working-directory: ${{ env.APP_PATH }}
 
     - name: Build application
+      shell: bash
       run: npm run build
       working-directory: ${{ env.APP_PATH }}
 
@@ -58,5 +61,6 @@ runs:
         aws-region: ${{ inputs.aws-region }}
 
 #    - name: Sync to S3
+#      shell: bash
 #      run: |
 #        aws s3 sync ${{ env.APP_PATH }}/dist s3://${{ inputs.s3-bucket }}/${{ env.BUCKET_PATH }} --delete

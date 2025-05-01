@@ -21,6 +21,10 @@ inputs:
     description: 'Optional prefix inside the S3 bucket (default: none)'
     required: false
     default: ''
+  bucket-override-app-name:
+    description: 'Overrides the folder name inside the bucket'
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -28,7 +32,7 @@ runs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: setup node
+    - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version-file: '.nvmrc'
@@ -38,10 +42,14 @@ runs:
       shell: bash
       run: |
         echo "APP_PATH=${{ inputs.app-base-path }}/${{ inputs.app-name }}" >> $GITHUB_ENV
+        TARGET_NAME="${{ inputs.bucket-override-app-name }}"
+        if [ -z "$TARGET_NAME" ]; then
+          TARGET_NAME="${{ inputs.app-name }}"
+        fi
         if [ -n "${{ inputs.bucket-prefix }}" ]; then
-          echo "BUCKET_PATH=${{ inputs.bucket-prefix }}/${{ inputs.app-name }}" >> $GITHUB_ENV
+          echo "BUCKET_PATH=${{ inputs.bucket-prefix }}/$TARGET_NAME" >> $GITHUB_ENV
         else
-          echo "BUCKET_PATH=${{ inputs.app-name }}" >> $GITHUB_ENV
+          echo "BUCKET_PATH=$TARGET_NAME" >> $GITHUB_ENV
         fi
 
     - name: Install dependencies

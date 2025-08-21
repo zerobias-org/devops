@@ -37,7 +37,7 @@ runs:
       with:
         role-to-assume: ${{ env.AWS_PUBLISHING_ROLE }}
         role-session-name: ${{ github.event.repository.name }}
-        aws-region: ${{ env.AWS_PUBLISHING_REGION }}
+        aws-region: us-east-1
 
     - name: Generate Slack Message 
       id: generateSlackMessage

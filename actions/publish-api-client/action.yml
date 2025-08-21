@@ -1,0 +1,80 @@
+name: 'Publish an API Client'
+description: 'Publish an API Client Module for a ZeroBias service'
+inputs:
+  package:
+    description: The package which contains the API
+    required: true
+  apiName:
+    description: The path at which the API can be found (e.g. `hub`)
+    required: true
+  apiPath:
+    description: The sub-path for API calls. (e.g. `api/v1`).
+    required: false
+  moduleId:
+    description: The id of the generated module.
+    required: false
+  publishToken:
+    description: Token with permissions to publish packages
+    required: true
+  publishOnly:
+    description: Whether to only publish the client module, skipping image and release event
+    required: false
+    default: 'false'
+runs:
+  using: "composite"
+  steps:
+    - name: Import Secrets
+      uses: hashicorp/vault-action@v2.4.3
+      with:
+        method: jwt
+        url: ${{ secrets.VAULT_URL }}
+        role: publishing-role
+        path: gh-actions
+        secrets: |
+          operations-kv/data/ci/github username | USERNAME ;
+          operations-kv/data/ci/github readPackagesToken | READ_TOKEN;
+          operations-kv/data/ci/slack releasesWebhook | SLACK_RELEASES_WEBHOOK ;
+          operations-kv/data/ci/github docsDeploymentToken | DISPATCH_TOKEN;
+          operations-kv/data/ci/github zb-token | ZB_TOKEN;
+
+    - name: configure aws tools creds
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        role-to-assume: arn:aws:iam::961260934100:role/github-actions-publishing-role
+        role-session-name: ${{ github.event.repository.name }}
+        aws-region: us-east-1
+
+    - name: Publish Module
+      id: publishModule
+      uses: zerobias-org/devops/actions/publish-api-client-module@hub-module-ts-client-publish
+      with:
+        package: ${{ inputs.package }}
+        apiName: ${{ inputs.apiName }}
+        apiPath: ${{ inputs.apiPath }}
+        moduleId: ${{ inputs.moduleId }}
+        publishToken: ${{ inputs.publishToken }}
+    
+    - name: Publish Release Event
+      uses: zerobias-org/devops/actions/publish-release-event@hub-module-ts-client-publish
+      if: ${{ inputs.publishOnly != 'true' }}
+      env:
+        PACKAGE_DIRS: '["${{ steps.publishModule.outputs.dir }}"]'
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+
+    - name: Publish module image
+      if: ${{ inputs.publishOnly != 'true' }}
+      shell: bash
+      run: |
+        bash ${{ github.action_path }}/publishimage.sh ${{ steps.publishModule.outputs.packageName }} ${{ steps.publishModule.outputs.packageVersion }}
+
+    - name: Slack Notification
+      uses: rtCamp/action-slack-notify@master
+      if: ${{ env.SLACK_MESSAGE != '' }}
+      env:
+        SLACK_COLOR: good
+        SLACK_WEBHOOK: ${{ env.SLACK_RELEASES_WEBHOOK }}
+        SLACK_ICON_EMOJI: ':robot:'
+        MSG_MINIMAL: 'true'
+        SLACK_TITLE: ':gear: new ${{ github.repository }} artifacts published :tada:'
+        SLACK_MESSAGE: '${{ steps.publishModule.outputs.packageId }}'
+        SLACK_FOOTER: ''

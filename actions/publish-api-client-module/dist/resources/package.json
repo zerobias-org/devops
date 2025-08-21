@@ -1,0 +1,68 @@
+{
+  "name": "__PACKAGE_NAME__",
+  "version": "__VERSION__",
+  "description": "Auditmation __IMPL_NAME__",
+  "moduleId": "__MODULE_ID__",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "clean": "rm -rf generated/ dist/ docs/ full*.yml __API_FILENAME__",
+    "sync-meta": "VERSION=$(npm run -s get-version) NAME=$(yq -oy e .name package.json) DESC=$(yq -oy e .description package.json) yq e -i '.info.version=strenv(VERSION) | .info.title=strenv(NAME) | .info.description=strenv(DESC)' api.yml",
+    "validate": "npx swagger-cli validate api.yml",
+    "generate:full": "cp api.yml full.yml && if test -f connectionProfile.yml; then yq e -i '.components.schemas.ConnectionProfile.$ref'=\\\"./connectionProfile.yml\\\" full.yml; fi && if test -f connectionState.yml; then yq e -i '.components.schemas.ConnectionState.$ref'=\\\"./connectionState.yml\\\" full.yml; fi",
+    "generate:inflate": "swagger-cli bundle -t yaml full.yml > full2.yml && mv full2.yml full.yml && cp full.yml __API_FILENAME__",
+    "generate:api": "hub-generator generate -g hub-module -i full.yml -o generated/ $(if test -f connectionProfile.yml; then echo -p isConnector=true;fi) $(if test -f connectionState.yml; then echo -p hasState=true;fi)",
+    "generate": "npm run generate:full && npm run generate:inflate && npm run generate:api",
+    "transpile": "tsc",
+    "build": "npm run validate && npm run generate && ./fix-gen-code.sh && npm run transpile",
+    "docs:redoc": "redoc-cli bundle __API_FILENAME__",
+    "docs:api": "hub-generator generate -g hub-markdown -i full.yml -o docs/",
+    "docs:combine": "concat-md --toc --decrease-title-levels --dir-name-as-title docs >> README.md",
+    "docs": "npm run docs:redoc",
+    "docs:broken": "npm run docs:redoc && npm run docs:api && npm run docs:combine",
+    "version": "npm run sync-meta && git add api.yml",
+    "test": "",
+    "get-version": "yq -oy e .version package.json",
+    "postpublish:disabled": "curl -i -u $NPM_USER:$WORKFLOW_DISPATCH_TOKEN -X POST -H \"Accept: application/vnd.github.v3+json\" https://api.github.com/repos/auditlogic/module/actions/workflows/$WORKFLOW_ID/dispatches -d '{\"ref\":\"master\", \"inputs\":{\"module\":\"dana\", \"tag\":\"'$(yq -oy e .name package.json)@$(yq -oy e .version package.json)'\", \"message\":\"'\"$MESSAGE\"'\"}}'"
+  },
+  "author": "ci@neverfail.com",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "__REPOSITORY__"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "__API_FILENAME__",
+    "connectionProfile.yml",
+    "dist",
+    "generated/api/manifest.json",
+    "docs/",
+    "CHANGELOG.md"
+  ],
+  "auditmation":{
+    "package": "auditmation.auditmation.__API_NAME__.module",
+    "dataloader-version": "0.5.4",
+    "import-artifact": "module"
+  },
+  "dependencies": {
+    "@auditlogic/product-auditmation-auditmation": "^1.5.1",
+    "@auditmation/hub-core": "4.4.49",
+    "@auditmation/util-api-invoker-api": "7.1.10",
+    "@auditmation/util-api-invoker-isomorphic": "7.1.17",
+    "jsonata": "1.8.6"
+  },
+  "peerDependencies": {
+    "@auditmation/types-core-js": "^4.9.11",
+    "@auditmation/types-amazon-js": "^4.2.9"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-cli": "^4.0.3",
+    "@auditmation/util-codegen": "5.5.17",
+    "@types/node": "16.18.71",
+    "concat-md": "^0.3.5",
+    "redoc-cli": "^0.10.0",
+    "typescript": "^4.8.4"
+  }
+}

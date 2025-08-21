@@ -1,0 +1,22 @@
+type: object
+description: >-
+  Profile for connecting to the service. If neither the API Key nor the JWT are provided, the 
+  client will assume it is being used in the browser by a logged-in user with a Cookie. i.e. - it 
+  will attempt to connect without setting an `Authorization` header.
+properties:
+  url:
+    type: string
+    format: url
+    description: URL where the service will be found.
+  apiKey:
+    type: string  
+    description: Personal access token, an OAuth token, an installation access token or a JSON Web Token
+    format: password
+  orgId:
+    type: string
+    format: uuid
+    description: Id for the organization
+  jwt:
+    type: string  
+    description: a JSON Web Token
+    format: password

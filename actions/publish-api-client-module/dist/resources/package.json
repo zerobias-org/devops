@@ -1,14 +1,14 @@
 {
   "name": "__PACKAGE_NAME__",
   "version": "__VERSION__",
-  "description": "Auditmation __IMPL_NAME__",
+  "description": "__PUBLISHER__ __IMPL_NAME__",
   "moduleId": "__MODULE_ID__",
   "main": "dist/src/index.js",
   "scripts": {
     "clean": "rm -rf generated/ dist/ docs/ full*.yml __API_FILENAME__",
     "sync-meta": "VERSION=$(npm run -s get-version) NAME=$(yq -oy e .name package.json) DESC=$(yq -oy e .description package.json) yq e -i '.info.version=strenv(VERSION) | .info.title=strenv(NAME) | .info.description=strenv(DESC)' api.yml",
     "validate": "npx swagger-cli validate api.yml",
-    "generate:full": "cp api.yml full.yml && if test -f connectionProfile.yml; then yq e -i '.components.schemas.ConnectionProfile.$ref'=\\\"./connectionProfile.yml\\\" full.yml; fi && if test -f connectionState.yml; then yq e -i '.components.schemas.ConnectionState.$ref'=\\\"./connectionState.yml\\\" full.yml; fi",
+    "generate:full": "cp api.yml full.yml && if test -f connectionProfile.yml; then yq -i 'del(.components.schemas.ConnectionProfile)' full.yml && yq e -i '.components.schemas.ConnectionProfile.$ref'=\\\"./connectionProfile.yml\\\" full.yml; fi && if test -f connectionState.yml; then yq -i 'del(.components.schemas.ConnectionState)' full.yml && yq e -i '.components.schemas.ConnectionState.$ref'=\\\"./connectionState.yml\\\" full.yml; fi",
     "generate:inflate": "swagger-cli bundle -t yaml full.yml > full2.yml && mv full2.yml full.yml && cp full.yml __API_FILENAME__",
     "generate:api": "hub-generator generate -g hub-module -i full.yml -o generated/ $(if test -f connectionProfile.yml; then echo -p isConnector=true;fi) $(if test -f connectionState.yml; then echo -p hasState=true;fi)",
     "generate": "npm run generate:full && npm run generate:inflate && npm run generate:api",
@@ -42,24 +42,24 @@
     "CHANGELOG.md"
   ],
   "auditmation":{
-    "package": "auditmation.auditmation.__API_NAME__.module",
+    "package": "__API_NAME__",
     "dataloader-version": "0.5.4",
-    "import-artifact": "module"
+    "import-artifact": "__IMPORT_ARTIFACT__"
   },
   "dependencies": {
-    "@auditlogic/product-auditmation-auditmation": "^1.5.1",
-    "@auditmation/hub-core": "4.4.49",
-    "@auditmation/util-api-invoker-api": "7.1.10",
-    "@auditmation/util-api-invoker-isomorphic": "7.1.17",
+    "@auditlogic/product-auditmation-auditmation": "^1.3.0",
+    "@auditmation/hub-core": "4.4.2",
+    "@auditmation/util-api-invoker-api": "7.1.3",
+    "@auditmation/util-api-invoker-isomorphic": "7.1.8",
     "jsonata": "1.8.6"
   },
   "peerDependencies": {
-    "@auditmation/types-core-js": "^4.9.11",
-    "@auditmation/types-amazon-js": "^4.2.9"
+    "@auditmation/types-core-js": "^4.9.2",
+    "@auditmation/types-amazon-js": "^4.2.4"
   },
   "devDependencies": {
     "@apidevtools/swagger-cli": "^4.0.3",
-    "@auditmation/util-codegen": "5.5.17",
+    "@auditmation/util-codegen": "5.5.6",
     "@types/node": "16.18.71",
     "concat-md": "^0.3.5",
     "redoc-cli": "^0.10.0",

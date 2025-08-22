@@ -11,21 +11,7 @@ export async function ensureRequestPrototype(
   input.location.hostname = connectionProfile?.url?.hostname;
   input.location.protocol = connectionProfile?.url?.protocol as 'http' | 'https' || 'https';
   input.location.port = connectionProfile?.url?.port;
-
-  let connectionProfileBasePath = '';
-  if (connectionProfile
-    && connectionProfile.url
-    && connectionProfile.url.path
-    && connectionProfile.url.path !== ''
-    && connectionProfile.url.path !== '/') {
-    connectionProfileBasePath = `${connectionProfile.url.path}`;
-  }
-
-  input.location.path = `${connectionProfileBasePath}__API_PATH__${input.location.path}`;
-  if (input.location.path.startsWith('//')) {
-    input.location.path = input.location.path.replace('//', '/');
-  }
-
+  input.location.path = `__API_PATH__${input.location.path}`;
   input.headers = {};
 
   let auth: string | undefined;
@@ -40,6 +26,5 @@ export async function ensureRequestPrototype(
   if (connectionProfile?.orgId) {
     input.headers['dana-org-id'] = connectionProfile?.orgId;
   }
-
   return input;
 }

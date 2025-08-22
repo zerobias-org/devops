@@ -46,7 +46,7 @@ runs:
 
     - name: Publish Module
       id: publishModule
-      uses: zerobias-org/devops/actions/publish-api-client-module@hub-module-ts-client-publish
+      uses: zerobias-org/devops/actions/publish-api-client-module@main
       with:
         package: ${{ inputs.package }}
         apiName: ${{ inputs.apiName }}
@@ -55,7 +55,7 @@ runs:
         publishToken: ${{ inputs.publishToken }}
     
     - name: Publish Release Event
-      uses: zerobias-org/devops/actions/publish-release-event@hub-module-ts-client-publish
+      uses: zerobias-org/devops/actions/publish-release-event@main
       if: ${{ inputs.publishOnly != 'true' }}
       env:
         PACKAGE_DIRS: '["${{ steps.publishModule.outputs.dir }}"]'

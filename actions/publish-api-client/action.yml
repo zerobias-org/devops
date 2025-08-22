@@ -27,7 +27,7 @@ runs:
       uses: hashicorp/vault-action@v2.4.3
       with:
         method: jwt
-        url: ${{ secrets.VAULT_URL }}
+        url: https://vault.auditmation.io:8200
         role: publishing-role
         path: gh-actions
         secrets: |

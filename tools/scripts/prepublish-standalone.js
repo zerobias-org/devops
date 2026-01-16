@@ -35,25 +35,114 @@ if (!serviceDir || !rootDir) {
 
 const BACKUP_SUFFIX = '.prepublish-backup';
 
-// Common build tools that may be referenced in scripts
-// Maps CLI command name -> npm package name
-const KNOWN_BUILD_TOOLS = new Map([
-  ['tsc', 'typescript'],
-  ['typescript', 'typescript'],
-  ['ts-node', 'ts-node'],
-  ['tsx', 'tsx'],
+// Manual overrides for bin -> package mappings
+// Use this for cases where the auto-detected mapping should be overridden
+// (e.g., project uses custom eslint config instead of eslint directly)
+const BIN_PACKAGE_OVERRIDES = new Map([
   ['eslint', '@zerobias-org/eslint-config'], // Project uses custom eslint config
-  ['mocha', 'mocha'],
-  ['jest', 'jest'],
-  ['rimraf', 'rimraf'],
-  ['shx', 'shx'],
-  ['nodemon', 'nodemon'],
-  ['concurrently', 'concurrently'],
-  ['lerna', 'lerna'],
-  ['nx', 'nx'],
-  ['redocly', '@redocly/cli'],
-  ['ajv', 'ajv'],
 ]);
+
+// Cached bin-to-package map built dynamically from node_modules
+let binToPackageMap = null;
+
+/**
+ * Discover bin-to-package mappings by scanning node_modules
+ * Reads package.json files and extracts bin field mappings
+ * @param {string} rootDir - Root directory containing node_modules
+ * @returns {Map<string, string>} Map of bin command name -> package name
+ */
+function discoverBinMappings(rootDir) {
+  const binMap = new Map();
+  const nodeModulesDir = path.join(rootDir, 'node_modules');
+
+  if (!fs.existsSync(nodeModulesDir)) {
+    console.log('[WARN] node_modules not found, bin discovery skipped');
+    return binMap;
+  }
+
+  /**
+   * Process a single package directory
+   */
+  function processPackage(pkgDir, packageName) {
+    const pkgJsonPath = path.join(pkgDir, 'package.json');
+    if (!fs.existsSync(pkgJsonPath)) return;
+
+    try {
+      const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+      const bin = pkgJson.bin;
+
+      if (!bin) return;
+
+      if (typeof bin === 'string') {
+        // Single bin, command name is the package name (without scope)
+        const cmdName = packageName.startsWith('@')
+          ? packageName.split('/')[1]
+          : packageName;
+        binMap.set(cmdName, packageName);
+      } else if (typeof bin === 'object') {
+        // Multiple bins: { "cmd": "./path" }
+        for (const cmdName of Object.keys(bin)) {
+          binMap.set(cmdName, packageName);
+        }
+      }
+    } catch {
+      // Skip packages with invalid package.json
+    }
+  }
+
+  try {
+    // Process root-level packages
+    const entries = fs.readdirSync(nodeModulesDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      // Skip hidden directories and .bin
+      if (entry.name.startsWith('.')) continue;
+
+      if (entry.name.startsWith('@')) {
+        // Scoped package: scan @scope/package subdirectories
+        const scopeDir = path.join(nodeModulesDir, entry.name);
+        try {
+          const scopeEntries = fs.readdirSync(scopeDir, { withFileTypes: true });
+          for (const scopeEntry of scopeEntries) {
+            if (scopeEntry.isDirectory()) {
+              const packageName = `${entry.name}/${scopeEntry.name}`;
+              processPackage(path.join(scopeDir, scopeEntry.name), packageName);
+            }
+          }
+        } catch {
+          // Skip unreadable scope directories
+        }
+      } else {
+        // Regular package
+        processPackage(path.join(nodeModulesDir, entry.name), entry.name);
+      }
+    }
+  } catch {
+    console.log('[WARN] Error scanning node_modules for bin mappings');
+  }
+
+  return binMap;
+}
+
+/**
+ * Get the bin-to-package map (cached)
+ * Combines discovered mappings with manual overrides
+ */
+function getBinToPackageMap(rootDir) {
+  if (binToPackageMap === null) {
+    console.log('\nDiscovering bin-to-package mappings from node_modules...');
+    binToPackageMap = discoverBinMappings(rootDir);
+    console.log(`Discovered ${binToPackageMap.size} bin commands`);
+
+    // Apply overrides
+    for (const [cmd, pkg] of BIN_PACKAGE_OVERRIDES) {
+      binToPackageMap.set(cmd, pkg);
+    }
+  }
+  return binToPackageMap;
+}
 
 // Packages that should be ignored (not real dependencies)
 const IGNORED_PACKAGES = new Set([
@@ -100,8 +189,10 @@ function createBackup(servicePackageJsonPath) {
 /**
  * Extract package names from script commands
  * Handles npx, node_modules/.bin, and direct package references
+ * @param {Object} scripts - package.json scripts object
+ * @param {Map<string, string>} binMap - bin command to package name mapping
  */
-function extractScriptDependencies(scripts) {
+function extractScriptDependencies(scripts, binMap) {
   const deps = new Set();
 
   for (const [scriptName, scriptCmd] of Object.entries(scripts || {})) {
@@ -118,8 +209,11 @@ function extractScriptDependencies(scripts) {
       if (npxMatch) {
         const pkg = npxMatch[1];
         if (!pkg.startsWith('-') && !pkg.startsWith('.')) {
-          // Handle scoped packages
-          if (pkg.startsWith('@')) {
+          // First check if it's a bin command that maps to a different package
+          if (binMap.has(pkg)) {
+            deps.add(binMap.get(pkg));
+          } else if (pkg.startsWith('@')) {
+            // Handle scoped packages
             deps.add(pkg.split('/').slice(0, 2).join('/'));
           } else {
             deps.add(pkg.split('/')[0]);
@@ -131,8 +225,8 @@ function extractScriptDependencies(scripts) {
       const binMatch = trimmed.match(/node_modules\/\.bin\/([^\s]+)/);
       if (binMatch) {
         const tool = binMatch[1];
-        if (KNOWN_BUILD_TOOLS.has(tool)) {
-          deps.add(KNOWN_BUILD_TOOLS.get(tool));
+        if (binMap.has(tool)) {
+          deps.add(binMap.get(tool));
         }
       }
 
@@ -140,8 +234,8 @@ function extractScriptDependencies(scripts) {
       const toolMatch = trimmed.match(/^([a-zA-Z][-a-zA-Z0-9]*)/);
       if (toolMatch) {
         const tool = toolMatch[1];
-        if (KNOWN_BUILD_TOOLS.has(tool)) {
-          deps.add(KNOWN_BUILD_TOOLS.get(tool));
+        if (binMap.has(tool)) {
+          deps.add(binMap.get(tool));
         }
       }
 
@@ -455,8 +549,11 @@ function main() {
   // Extract dependencies from package.json scripts (skip for libraries - they're build-time only)
   let scriptDeps = new Set();
   if (!isLibrary) {
+    // Build bin-to-package map from node_modules
+    const binMap = getBinToPackageMap(rootDir);
+
     console.log('\nScanning package.json scripts for build tools...');
-    scriptDeps = extractScriptDependencies(servicePackageJson.scripts);
+    scriptDeps = extractScriptDependencies(servicePackageJson.scripts, binMap);
     console.log(`Found ${scriptDeps.size} build tool dependencies from scripts`);
     if (scriptDeps.size > 0) {
       console.log('  Build tools:', [...scriptDeps].join(', '));

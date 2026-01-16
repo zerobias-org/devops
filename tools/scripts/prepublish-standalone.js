@@ -1,0 +1,604 @@
+#!/usr/bin/env node
+
+/**
+ * This script prepares a service for standalone publishing by:
+ * 1. Scanning source files for actual import statements
+ * 2. Scanning package.json scripts for build-time tool dependencies
+ * 3. Adding only required dependencies (build, runtime, scripts) from root package.json
+ * 4. Preserving the original package.json (backs it up first)
+ *
+ * Usage: node prepublish-standalone-v2.js <service-dir> <root-dir> [--dry-run] [--restore]
+ *
+ * Options:
+ *   --dry-run   Show what would be done without making changes
+ *   --restore   Restore the original package.json from backup
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+
+const args = process.argv.slice(2);
+const dryRun = args.includes('--dry-run');
+const restore = args.includes('--restore');
+const libraryMode = args.includes('--library'); // Skip build tool deps for library packages
+const serviceDir = args.find(arg => !arg.startsWith('--'));
+const rootDir = args.find((arg, i) => !arg.startsWith('--') && i > args.indexOf(serviceDir));
+
+if (!serviceDir || !rootDir) {
+  console.error('Usage: node prepublish-standalone.js <service-dir> <root-dir> [--dry-run] [--restore] [--library]');
+  console.error('\nOptions:');
+  console.error('  --dry-run   Show what would be done without making changes');
+  console.error('  --restore   Restore the original package.json from backup');
+  console.error('  --library   Skip build tool dependencies (for SDK/library packages)');
+  process.exit(1);
+}
+
+const BACKUP_SUFFIX = '.prepublish-backup';
+
+// Common build tools that may be referenced in scripts
+// Maps CLI command name -> npm package name
+const KNOWN_BUILD_TOOLS = new Map([
+  ['tsc', 'typescript'],
+  ['typescript', 'typescript'],
+  ['ts-node', 'ts-node'],
+  ['tsx', 'tsx'],
+  ['eslint', '@zerobias-org/eslint-config'], // Project uses custom eslint config
+  ['mocha', 'mocha'],
+  ['jest', 'jest'],
+  ['rimraf', 'rimraf'],
+  ['shx', 'shx'],
+  ['nodemon', 'nodemon'],
+  ['concurrently', 'concurrently'],
+  ['lerna', 'lerna'],
+  ['nx', 'nx'],
+  ['redocly', '@redocly/cli'],
+  ['ajv', 'ajv'],
+]);
+
+// Packages that should be ignored (not real dependencies)
+const IGNORED_PACKAGES = new Set([
+  'src',      // Relative path that slipped through regex
+  'dist',     // Build output directory
+  'test',     // Test directory
+  'scripts',  // Scripts directory
+  'node',     // Node.js runtime, not a package
+  'bin',      // Binary directory
+  'sdk',      // Common directory name that slips through
+  'api',      // Common directory name
+  'lib',      // Common directory name
+  'generated',// Generated code directory
+]);
+
+/**
+ * Restore the original package.json from backup
+ */
+function restoreBackup(servicePackageJsonPath) {
+  const backupPath = servicePackageJsonPath + BACKUP_SUFFIX;
+  if (fs.existsSync(backupPath)) {
+    fs.copyFileSync(backupPath, servicePackageJsonPath);
+    fs.unlinkSync(backupPath);
+    console.log('Restored package.json from backup');
+    return true;
+  }
+  console.log('No backup found to restore');
+  return false;
+}
+
+/**
+ * Create backup of original package.json
+ */
+function createBackup(servicePackageJsonPath) {
+  const backupPath = servicePackageJsonPath + BACKUP_SUFFIX;
+  if (!fs.existsSync(backupPath)) {
+    fs.copyFileSync(servicePackageJsonPath, backupPath);
+    console.log(`Created backup: ${backupPath}`);
+  } else {
+    console.log('Backup already exists, preserving original');
+  }
+}
+
+/**
+ * Extract package names from script commands
+ * Handles npx, node_modules/.bin, and direct package references
+ */
+function extractScriptDependencies(scripts) {
+  const deps = new Set();
+
+  for (const [scriptName, scriptCmd] of Object.entries(scripts || {})) {
+    if (!scriptCmd || typeof scriptCmd !== 'string') continue;
+
+    // Split by common command separators
+    const parts = scriptCmd.split(/[;&|]/);
+
+    for (const part of parts) {
+      const trimmed = part.trim();
+
+      // Match npx <package>
+      const npxMatch = trimmed.match(/npx\s+(?:--[^\s]+\s+)*([^\s]+)/);
+      if (npxMatch) {
+        const pkg = npxMatch[1];
+        if (!pkg.startsWith('-') && !pkg.startsWith('.')) {
+          // Handle scoped packages
+          if (pkg.startsWith('@')) {
+            deps.add(pkg.split('/').slice(0, 2).join('/'));
+          } else {
+            deps.add(pkg.split('/')[0]);
+          }
+        }
+      }
+
+      // Match node_modules/.bin/<tool>
+      const binMatch = trimmed.match(/node_modules\/\.bin\/([^\s]+)/);
+      if (binMatch) {
+        const tool = binMatch[1];
+        if (KNOWN_BUILD_TOOLS.has(tool)) {
+          deps.add(KNOWN_BUILD_TOOLS.get(tool));
+        }
+      }
+
+      // Match common build tool invocations at start of command
+      const toolMatch = trimmed.match(/^([a-zA-Z][-a-zA-Z0-9]*)/);
+      if (toolMatch) {
+        const tool = toolMatch[1];
+        if (KNOWN_BUILD_TOOLS.has(tool)) {
+          deps.add(KNOWN_BUILD_TOOLS.get(tool));
+        }
+      }
+
+      // Match "node --import <package>" pattern
+      const nodeImportMatch = trimmed.match(/node\s+--import\s+([^\s/]+)/);
+      if (nodeImportMatch) {
+        const pkg = nodeImportMatch[1];
+        if (pkg.startsWith('@')) {
+          deps.add(pkg.split('/').slice(0, 2).join('/'));
+        } else {
+          deps.add(pkg.split('/')[0]);
+        }
+      }
+    }
+  }
+
+  return deps;
+}
+
+/**
+ * Check if a string looks like a valid npm package name
+ */
+function isValidPackageName(name) {
+  if (!name || typeof name !== 'string') return false;
+
+  // Must not start with special chars (except @ for scoped)
+  if (name.startsWith('.') || name.startsWith('-') || name.startsWith('$')) return false;
+
+  // Must not contain shell syntax
+  if (name.includes('"') || name.includes("'") || name.includes(';') ||
+      name.includes('|') || name.includes('&') || name.includes('=') ||
+      name.includes('[') || name.includes(']') || name.includes('(') ||
+      name.includes(')') || name.includes('{') || name.includes('}')) {
+    return false;
+  }
+
+  // Scoped package validation: @scope/package
+  if (name.startsWith('@')) {
+    const parts = name.split('/');
+    if (parts.length !== 2) return false;
+    const scope = parts[0].substring(1); // Remove @
+    const pkg = parts[1];
+    // Scope and package must be valid
+    return /^[a-z0-9][-a-z0-9]*$/.test(scope) && /^[a-z0-9][-a-z0-9._]*$/.test(pkg);
+  }
+
+  // Unscoped package validation
+  return /^[a-z0-9][-a-z0-9._]*$/.test(name);
+}
+
+/**
+ * Scan shell script files for package references
+ * Returns a Set of package names found in node_modules paths or npx calls
+ */
+function scanShellScripts(directory) {
+  const packages = new Set();
+
+  function scanShellFile(filePath) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+
+      // Match node_modules/@scope/package or node_modules/package patterns
+      // Examples:
+      //   $NODE_MODULES_BASE_DIR/node_modules/@zerobias-org/util-alert-importer/bin/importer
+      //   node_modules/@zerobias-org/platform-dataloader/bin/dataloader
+      // Use stricter pattern: package names only contain alphanumeric, dash, underscore, dot
+      const nodeModulesRegex = /node_modules\/(@[a-z0-9][-a-z0-9]*\/[a-z0-9][-a-z0-9._]*|[a-z0-9][-a-z0-9._]*)/gi;
+      let match;
+      while ((match = nodeModulesRegex.exec(content)) !== null) {
+        const pkg = match[1].toLowerCase();
+        if (isValidPackageName(pkg)) {
+          packages.add(pkg);
+        }
+      }
+
+      // Match npx @scope/package or npx package patterns
+      // Must be followed by space, end of line, or path separator
+      const npxRegex = /npx\s+(?:node\s+)?(?:\$[A-Z_]+\/)?(?:node_modules\/)?(@[a-z0-9][-a-z0-9]*\/[a-z0-9][-a-z0-9._]*|[a-z][a-z0-9-]*)/gi;
+      while ((match = npxRegex.exec(content)) !== null) {
+        const pkg = match[1].toLowerCase();
+        if (isValidPackageName(pkg)) {
+          packages.add(pkg);
+        }
+      }
+
+    } catch {
+      // Ignore files that can't be read
+    }
+  }
+
+  function scanDirectory(dir) {
+    if (!fs.existsSync(dir)) return;
+
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+
+        // Skip node_modules
+        if (entry.name === 'node_modules' || entry.name === '.git') {
+          continue;
+        }
+
+        if (entry.isDirectory()) {
+          scanDirectory(fullPath);
+        } else if (entry.isFile() && entry.name.endsWith('.sh')) {
+          scanShellFile(fullPath);
+        }
+      }
+    } catch {
+      // Ignore directories that can't be read
+    }
+  }
+
+  // Scan src directory for shell scripts
+  scanDirectory(path.join(directory, 'src'));
+
+  // Scan scripts directory
+  scanDirectory(path.join(directory, 'scripts'));
+
+  // Also check root of service directory for shell scripts
+  try {
+    const entries = fs.readdirSync(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.endsWith('.sh')) {
+        scanShellFile(path.join(directory, entry.name));
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  return packages;
+}
+
+/**
+ * Scan TypeScript/JavaScript files for import statements
+ * Returns a Set of package names (external dependencies only)
+ */
+function scanImports(directory, extensions = ['.ts', '.js', '.mts', '.mjs']) {
+  const imports = new Set();
+
+  function scanFile(filePath) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+
+      // Match ES6 imports: import ... from 'package' or import 'package'
+      const importRegex = /(?:import\s+(?:[\s\S]*?from\s+)?['"]([^'"]+)['"]|require\s*\(['"]([^'"]+)['"]\))/g;
+
+      let match;
+      while ((match = importRegex.exec(content)) !== null) {
+        const importPath = match[1] || match[2];
+
+        // Skip relative imports
+        if (importPath.startsWith('.') || importPath.startsWith('/')) {
+          continue;
+        }
+
+        // Skip node: protocol imports
+        if (importPath.startsWith('node:')) {
+          continue;
+        }
+
+        // Extract package name (handle scoped packages)
+        let packageName;
+        if (importPath.startsWith('@')) {
+          // Scoped package: @scope/package or @scope/package/subpath
+          const parts = importPath.split('/');
+          packageName = parts.slice(0, 2).join('/');
+        } else {
+          // Regular package: package or package/subpath
+          packageName = importPath.split('/')[0];
+        }
+
+        imports.add(packageName);
+      }
+    } catch {
+      // Ignore files that can't be read
+    }
+  }
+
+  function scanDirectory(dir) {
+    if (!fs.existsSync(dir)) return;
+
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+
+        // Skip node_modules and common non-source directories
+        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === '.git') {
+          continue;
+        }
+
+        if (entry.isDirectory()) {
+          scanDirectory(fullPath);
+        } else if (entry.isFile() && extensions.some(ext => entry.name.endsWith(ext))) {
+          scanFile(fullPath);
+        }
+      }
+    } catch {
+      // Ignore directories that can't be read
+    }
+  }
+
+  // Scan src directory
+  scanDirectory(path.join(directory, 'src'));
+
+  // Also scan generated directory if it exists
+  scanDirectory(path.join(directory, 'generated'));
+
+  // Scan scripts directory for any Node.js scripts
+  scanDirectory(path.join(directory, 'scripts'));
+
+  return imports;
+}
+
+/**
+ * Get transitive dependencies for workspace packages
+ */
+function getWorkspaceTransitiveDeps(packageName, workspacePackageJsons, visited = new Set()) {
+  if (visited.has(packageName)) return new Set();
+  visited.add(packageName);
+
+  const packageJson = workspacePackageJsons.get(packageName);
+  if (!packageJson) return new Set();
+
+  const deps = new Set();
+  const allDeps = { ...packageJson.dependencies };
+
+  for (const dep of Object.keys(allDeps)) {
+    deps.add(dep);
+    // Recursively get transitive deps from workspace packages
+    if (workspacePackageJsons.has(dep)) {
+      const transitive = getWorkspaceTransitiveDeps(dep, workspacePackageJsons, visited);
+      transitive.forEach(d => deps.add(d));
+    }
+  }
+
+  return deps;
+}
+
+/**
+ * Main function
+ */
+function main() {
+  const servicePackageJsonPath = path.join(serviceDir, 'package.json');
+
+  // Handle restore mode
+  if (restore) {
+    restoreBackup(servicePackageJsonPath);
+    return;
+  }
+
+  // Read root package.json
+  const rootPackageJsonPath = path.join(rootDir, 'package.json');
+  const rootPackageJson = JSON.parse(fs.readFileSync(rootPackageJsonPath, 'utf8'));
+  const rootDeps = rootPackageJson.dependencies || {};
+  const rootDevDeps = rootPackageJson.devDependencies || {};
+
+  // Build map of workspace package names to their package.json content
+  const workspacePackages = new Map(); // name -> version
+  const workspacePackageJsons = new Map(); // name -> full package.json
+
+  const workspaces = rootPackageJson.workspaces || [];
+
+  for (const ws of workspaces) {
+    const wsPackageJsonPath = path.join(rootDir, ws, 'package.json');
+    if (fs.existsSync(wsPackageJsonPath)) {
+      const wsPackageJson = JSON.parse(fs.readFileSync(wsPackageJsonPath, 'utf8'));
+      if (wsPackageJson.name && wsPackageJson.version) {
+        workspacePackages.set(wsPackageJson.name, wsPackageJson.version);
+        workspacePackageJsons.set(wsPackageJson.name, wsPackageJson);
+      }
+    }
+  }
+
+  // Read service package.json
+  const servicePackageJson = JSON.parse(fs.readFileSync(servicePackageJsonPath, 'utf8'));
+
+  // Auto-detect library mode based on zerobias.import-artifact field
+  // SDK packages should not include build tool dependencies
+  const isLibrary = libraryMode ||
+    servicePackageJson.zerobias?.['import-artifact'] === 'sdk' ||
+    servicePackageJson.zerobias?.['import-artifact'] === 'library';
+
+  console.log(`\n=== Preparing standalone package: ${servicePackageJson.name} ===`);
+  console.log(`Service directory: ${serviceDir}`);
+  console.log(`Root directory: ${rootDir}`);
+  if (isLibrary) console.log('** LIBRARY MODE - skipping build tool dependencies **');
+  if (dryRun) console.log('** DRY RUN MODE **\n');
+
+  // Scan for actual imports in source files
+  console.log('\nScanning source files for imports...');
+  const scannedImports = scanImports(serviceDir);
+  console.log(`Found ${scannedImports.size} unique package imports from source files`);
+
+  // Scan shell scripts for package references (skip for libraries - they're build-time only)
+  let shellDeps = new Set();
+  if (!isLibrary) {
+    console.log('\nScanning shell scripts for package references...');
+    shellDeps = scanShellScripts(serviceDir);
+    console.log(`Found ${shellDeps.size} package references from shell scripts`);
+    if (shellDeps.size > 0) {
+      console.log('  Shell script deps:', [...shellDeps].join(', '));
+    }
+  } else {
+    console.log('\nSkipping shell script scan (library mode)');
+  }
+
+  // Extract dependencies from package.json scripts (skip for libraries - they're build-time only)
+  let scriptDeps = new Set();
+  if (!isLibrary) {
+    console.log('\nScanning package.json scripts for build tools...');
+    scriptDeps = extractScriptDependencies(servicePackageJson.scripts);
+    console.log(`Found ${scriptDeps.size} build tool dependencies from scripts`);
+    if (scriptDeps.size > 0) {
+      console.log('  Build tools:', [...scriptDeps].join(', '));
+    }
+  } else {
+    console.log('Skipping script dependency scan (library mode)');
+  }
+
+  // Start with existing service dependencies
+  const existingDeps = { ...servicePackageJson.dependencies };
+  const requiredDeps = new Set();
+
+  // Add all scanned imports to required deps
+  for (const pkg of scannedImports) {
+    requiredDeps.add(pkg);
+  }
+
+  // Add shell script dependencies
+  for (const pkg of shellDeps) {
+    requiredDeps.add(pkg);
+  }
+
+  // Add script dependencies
+  for (const pkg of scriptDeps) {
+    requiredDeps.add(pkg);
+  }
+
+  // Add existing service dependencies
+  for (const pkg of Object.keys(existingDeps)) {
+    requiredDeps.add(pkg);
+  }
+
+  // Expand workspace package dependencies transitively
+  const transitiveDeps = new Set();
+  for (const pkg of requiredDeps) {
+    if (workspacePackageJsons.has(pkg)) {
+      const deps = getWorkspaceTransitiveDeps(pkg, workspacePackageJsons);
+      deps.forEach(d => transitiveDeps.add(d));
+    }
+  }
+  transitiveDeps.forEach(d => requiredDeps.add(d));
+
+  // Build new dependencies object
+  const newDependencies = {};
+  const addedDeps = [];
+  const missingDeps = [];
+
+  for (const pkg of requiredDeps) {
+    // Skip ignored packages
+    if (IGNORED_PACKAGES.has(pkg)) {
+      continue;
+    }
+
+    // Check if it's a workspace package
+    if (workspacePackages.has(pkg)) {
+      newDependencies[pkg] = workspacePackages.get(pkg);
+      if (!existingDeps[pkg]) {
+        addedDeps.push(`${pkg}@${workspacePackages.get(pkg)} (workspace)`);
+      }
+      continue;
+    }
+
+    // Check if it's in root dependencies
+    if (rootDeps[pkg]) {
+      newDependencies[pkg] = rootDeps[pkg];
+      if (!existingDeps[pkg]) {
+        addedDeps.push(`${pkg}@${rootDeps[pkg]}`);
+      }
+      continue;
+    }
+
+    // Check if it's in root devDependencies (needed for build/scripts)
+    if (rootDevDeps[pkg]) {
+      newDependencies[pkg] = rootDevDeps[pkg];
+      if (!existingDeps[pkg]) {
+        addedDeps.push(`${pkg}@${rootDevDeps[pkg]} (dev)`);
+      }
+      continue;
+    }
+
+    // Check if it's a Node.js built-in (shouldn't be in imports but just in case)
+    const builtins = ['fs', 'path', 'http', 'https', 'crypto', 'stream', 'url', 'util', 'os', 'child_process', 'events', 'assert', 'buffer', 'net', 'tls', 'dns', 'readline', 'zlib'];
+    if (builtins.includes(pkg)) {
+      continue;
+    }
+
+    // Package not found in root - might be a problem
+    missingDeps.push(pkg);
+  }
+
+  // Sort dependencies alphabetically
+  const sortedDependencies = {};
+  Object.keys(newDependencies).sort().forEach(key => {
+    sortedDependencies[key] = newDependencies[key];
+  });
+
+  // Report
+  console.log('\n=== Summary ===');
+  console.log(`Scanned imports: ${scannedImports.size}`);
+  console.log(`Shell script deps: ${shellDeps.size}`);
+  console.log(`Script dependencies: ${scriptDeps.size}`);
+  console.log(`Required dependencies (including transitive): ${requiredDeps.size}`);
+  console.log(`Final dependencies: ${Object.keys(sortedDependencies).length}`);
+
+  if (addedDeps.length > 0) {
+    console.log(`\nAdded ${addedDeps.length} dependencies:`);
+    addedDeps.slice(0, 30).forEach(dep => console.log(`  + ${dep}`));
+    if (addedDeps.length > 30) {
+      console.log(`  ... and ${addedDeps.length - 30} more`);
+    }
+  }
+
+  if (missingDeps.length > 0) {
+    console.log(`\n[WARNING] ${missingDeps.length} imported packages not found in root dependencies:`);
+    missingDeps.forEach(dep => console.log(`  ! ${dep}`));
+  }
+
+  // Compare with current approach (all root deps)
+  const allRootDepsCount = Object.keys(rootDeps).length;
+  const savings = allRootDepsCount - Object.keys(sortedDependencies).length;
+  console.log(`\nDependency reduction: ${allRootDepsCount} -> ${Object.keys(sortedDependencies).length} (${savings} fewer)`);
+
+  if (dryRun) {
+    console.log('\n[DRY RUN] No changes made');
+    console.log('\nDependencies that would be included:');
+    Object.entries(sortedDependencies).forEach(([pkg, version]) => {
+      console.log(`  ${pkg}: ${version}`);
+    });
+    return;
+  }
+
+  // Create backup before modifying
+  createBackup(servicePackageJsonPath);
+
+  // Update service package.json
+  servicePackageJson.dependencies = sortedDependencies;
+  delete servicePackageJson.devDependencies;
+
+  // Write updated package.json
+  fs.writeFileSync(servicePackageJsonPath, JSON.stringify(servicePackageJson, null, 2) + '\n');
+  console.log(`\nUpdated ${servicePackageJsonPath}`);
+  console.log(`Total dependencies in standalone package: ${Object.keys(sortedDependencies).length}`);
+}
+
+main();

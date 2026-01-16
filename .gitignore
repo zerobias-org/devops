@@ -1,3 +1,27 @@
-# IDE
-.vscode
-.idea
+.tags
+
+# ignore things that are local to the environment
+*.env*
+*.pem
+*.tgz
+.envrc
+
+**/node_modules/*
+
+*.log
+
+**/.serverless
+serverless.yml
+**/dist/resources/**
+
+.terraform/
+.idea/
+
+.jira.d/
+
+.rgignore
+.DS_Store
+**/dist/**
+
+.nx/**
+node_modules/

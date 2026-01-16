@@ -1,0 +1,149 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+  pull-requests: read
+
+env:
+  ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
+  NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  READ_TOKEN: ${{ secrets.READ_TOKEN }}
+  WRITE_TOKEN: ${{ secrets.WRITE_TOKEN }}
+  DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+  SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+  SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Acquire cache v4
+        uses: actions/cache@v4
+        with:
+          path: .git
+          key: repo-git-folder
+
+      - name: Check out code v4
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup node v4
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      
+      - name: configure git user
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+
+      - name: Install nx
+        run: |
+          npm install -g nx@20.5.0
+        env:
+          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+      - name: Determine base ref for nx affected
+        id: base_ref
+        run: |
+          # Get the last publish tag for nx affected base reference
+          LAST_PUBLISH_TAG=$(git describe --tags --abbrev=0 --match="*" 2>/dev/null || echo "")
+          if [ -z "$LAST_PUBLISH_TAG" ]; then
+            echo "No publish tag found, using origin/main~1 as base"
+            echo "BASE_REF=origin/main~1" >> $GITHUB_OUTPUT
+          else
+            echo "Using last publish tag as base: $LAST_PUBLISH_TAG"
+            echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install and build
+        run: |
+          npm ci
+          nx run-many -t build
+        env:
+          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+      - name: Version affected packages, then commit
+        run: |
+          AFFECTED=$(nx show projects --affected --base=${{ steps.base_ref.outputs.BASE_REF }} 2>/dev/null || echo "")
+          if [ -n "$AFFECTED" ]; then
+            for pkg in $AFFECTED; do
+              PKG_ROOT=$(nx show project "$pkg" --json 2>/dev/null | jq -r '.root' || echo "")
+              if [ -n "$PKG_ROOT" ] && [ -f "$PKG_ROOT/package.json" ]; then
+                cd "$PKG_ROOT"
+                npm version patch --no-git-tag-version
+                # npm run generate:bom
+                cd - > /dev/null
+              fi
+            done
+            git add -A "*/package.json" "package.json" 2>/dev/null || true
+            git commit -m "chore: bump versions [skip ci]" || echo "No version changes to commit"
+            git push
+          fi
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+      - name: Save package.json state before prepublish - main
+        run: |
+          echo "Saving package.json files before prepublish modifications..."
+          mkdir -p /tmp/package-json-backup
+          find . -name "package.json" -not -path "*/node_modules/*" -exec cp --parents {} /tmp/package-json-backup/ \;
+
+      - name: Prepare standalone packages
+        run: |
+          # Run sequentially to avoid race conditions when reading/writing package.json files
+          nx affected -t nx:prepublish --base=${{ steps.base_ref.outputs.BASE_REF }} --parallel=1
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+      - name: Publish packages
+        run: |
+          nx affected -t nx:publish --base=${{ steps.base_ref.outputs.BASE_REF }}
+        env:
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+          NPM_TOKEN: ${{ env.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+      - name: Restore package.json state after publish
+        run: |
+          echo "Restoring package.json files to pre-prepublish state..."
+          cp -r /tmp/package-json-backup/./* .
+
+      - name: Slack Notification on failure
+        uses: slackapi/slack-github-action@v2.0.0
+        if: failure()
+        with:
+          webhook: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":fire: ${{ inputs.image-name }} (${{ steps.platform.outputs.tag }}) image build failed",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "text": "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
+                }
+              ]
+            }
+
+      - name: Release Announcement
+        uses: zerobias-org/devops/actions/release-announcement@main

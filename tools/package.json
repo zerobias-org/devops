@@ -1,0 +1,30 @@
+{
+  "name": "@zerobias-org/devops-tools",
+  "version": "1.0.7",
+  "description": "Collection of scripts and tools for ZeroBias devops",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zerobias-org/devops.git",
+    "directory": "tools"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "author": "team@zerobias.com",
+  "license": "UNLICENSED",
+  "files": [
+    "scripts/**",
+    "src/**",
+    "bom.json"
+  ],
+  "scripts": {
+    "nx:prepublish": "./scripts/prepublish-standalone.sh",
+    "nx:publish": "./scripts/publish.sh"
+  },
+  "bin": {
+    "triggerSchemaDocs": "src/triggerSchemaDocs.js",
+    "prepublish-standalone": "scripts/prepublish-standalone.sh",
+    "publish": "scripts/publish.sh"
+  }
+}

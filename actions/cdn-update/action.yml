@@ -79,17 +79,17 @@ runs:
             filename=$(echo $filename | sed 's/\//-/g')
             echo "Uploading $logo"
             aws s3 cp $logo s3://$CDN_BUCKET/logos/$filename
-            # echo "Setting logo url"
-            # logourl="https://cdn.auditmation.io/logos/$filename" yq -i '.logo = env(logourl)' $pkg/index.yml
+            echo "Setting logo url"
+            logourl="https://cdn.auditmation.io/logos/$filename" yq -i '.logo = env(logourl)' $pkg/index.yml
           fi
         done
       env:
         UPDATE_ALL: ${{ inputs.update-all }}
         CDN_BUCKET: ${{ inputs.cdn-bucket }}
 
-    # - uses: EndBug/add-and-commit@v9
-    #   with:
-    #     add: .
-    #     author_name: Marvin the Paranoid Android
-    #     author_email: ci@neverfail.com
-    #     message: 'chore: cdn update'
+    - uses: EndBug/add-and-commit@v9
+      with:
+        add: .
+        author_name: Marvin the Paranoid Android
+        author_email: ci@zerobias.com
+        message: 'chore: cdn update'

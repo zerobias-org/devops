@@ -37,9 +37,8 @@ const BACKUP_SUFFIX = '.prepublish-backup';
 
 // Manual overrides for bin -> package mappings
 // Use this for cases where the auto-detected mapping should be overridden
-// (e.g., project uses custom eslint config instead of eslint directly)
 const BIN_PACKAGE_OVERRIDES = new Map([
-  ['eslint', '@zerobias-org/eslint-config'], // Project uses custom eslint config
+  // Add overrides here if needed
 ]);
 
 // Cached bin-to-package map built dynamically from node_modules
@@ -454,6 +453,70 @@ function scanImports(directory, extensions = ['.ts', '.js', '.mts', '.mjs']) {
 }
 
 /**
+ * Scan config files (eslint, prettier, etc.) for package imports
+ * These files are not in src/ but may import shared config packages
+ * @param {string} directory - Service directory to scan
+ * @returns {Set<string>} Set of package names found in config files
+ */
+function scanConfigFiles(directory) {
+  const imports = new Set();
+
+  // Config file patterns to scan
+  const configPatterns = [
+    'eslint.config.js',
+    'eslint.config.mjs',
+    'eslint.config.cjs',
+    '.eslintrc.js',
+    '.eslintrc.cjs',
+    '.eslintrc.mjs',
+    'prettier.config.js',
+    'prettier.config.mjs',
+    '.prettierrc.js',
+    '.prettierrc.cjs',
+  ];
+
+  function extractImports(content) {
+    // Match ES6 imports and require statements
+    const importRegex = /(?:import\s+(?:[\s\S]*?from\s+)?['"]([^'"]+)['"]|require\s*\(['"]([^'"]+)['"]\))/g;
+
+    let match;
+    while ((match = importRegex.exec(content)) !== null) {
+      const importPath = match[1] || match[2];
+
+      // Skip relative imports and node: protocol
+      if (importPath.startsWith('.') || importPath.startsWith('/') || importPath.startsWith('node:')) {
+        continue;
+      }
+
+      // Extract package name (handle scoped packages)
+      let packageName;
+      if (importPath.startsWith('@')) {
+        const parts = importPath.split('/');
+        packageName = parts.slice(0, 2).join('/');
+      } else {
+        packageName = importPath.split('/')[0];
+      }
+
+      imports.add(packageName);
+    }
+  }
+
+  for (const pattern of configPatterns) {
+    const filePath = path.join(directory, pattern);
+    if (fs.existsSync(filePath)) {
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        extractImports(content);
+      } catch {
+        // Ignore files that can't be read
+      }
+    }
+  }
+
+  return imports;
+}
+
+/**
  * Get transitive dependencies for workspace packages
  */
 function getWorkspaceTransitiveDeps(packageName, workspacePackageJsons, visited = new Set()) {
@@ -584,6 +647,29 @@ function main() {
   // Add existing service dependencies
   for (const pkg of Object.keys(existingDeps)) {
     requiredDeps.add(pkg);
+  }
+
+  // Add implicit dependencies based on package name patterns
+  // e.g., eslint-config packages need eslint and related plugins
+  const implicitDeps = [];
+  if (servicePackageJson.name?.includes('eslint-config')) {
+    const eslintDeps = [
+      'eslint',
+      '@typescript-eslint/eslint-plugin',
+      '@typescript-eslint/parser',
+      'eslint-plugin-unicorn',
+    ];
+    for (const dep of eslintDeps) {
+      requiredDeps.add(dep);
+      implicitDeps.push(dep);
+    }
+  }
+  if (servicePackageJson.name?.includes('prettier-config')) {
+    requiredDeps.add('prettier');
+    implicitDeps.push('prettier');
+  }
+  if (implicitDeps.length > 0) {
+    console.log(`\nAdded implicit dependencies based on package name: ${implicitDeps.join(', ')}`);
   }
 
   // Expand workspace package dependencies transitively

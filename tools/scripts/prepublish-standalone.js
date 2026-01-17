@@ -835,6 +835,12 @@ function main() {
       continue;
     }
 
+    // Preserve existing service dependencies (e.g., workspace deps already defined)
+    if (existingDeps[pkg]) {
+      newDependencies[pkg] = existingDeps[pkg];
+      continue;
+    }
+
     // Package not found in root - might be a problem
     missingDeps.push(pkg);
   }

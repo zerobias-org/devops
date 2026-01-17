@@ -517,6 +517,102 @@ function scanConfigFiles(directory) {
 }
 
 /**
+ * Scan YAML files for package references
+ * Handles Spectral configs, and other YAML files that may reference npm packages
+ * @param {string} directory - Service directory to scan
+ * @returns {Set<string>} Set of package names found in YAML files
+ */
+function scanYamlFiles(directory) {
+  const packages = new Set();
+
+  /**
+   * Extract package references from YAML content
+   * Looks for extends: arrays/strings and other patterns that reference npm packages
+   */
+  function extractYamlPackages(content) {
+    // Match extends field - can be string or array of strings
+    // Pattern: extends: "@scope/package" or extends:\n  - "@scope/package"
+    // Also matches unscoped packages but filters out built-ins like "spectral:oas"
+
+    // Match array items under extends:
+    // Look for lines like:  - "@scope/package" or  - "package"
+    const extendsArrayRegex = /extends:\s*\n((?:\s+-\s+["']?[^\n]+["']?\n?)+)/gi;
+    let match;
+
+    while ((match = extendsArrayRegex.exec(content)) !== null) {
+      const arrayContent = match[1];
+      // Extract each array item - capture full value including any colon suffix for filtering
+      const itemRegex = /-\s+["']?([^"'\n]+)["']?/gi;
+      let itemMatch;
+      while ((itemMatch = itemRegex.exec(arrayContent)) !== null) {
+        const rawValue = itemMatch[1].trim();
+        // Skip built-in references like "spectral:oas"
+        if (rawValue.includes(':')) continue;
+        // Skip relative paths
+        if (rawValue.startsWith('.') || rawValue.startsWith('/')) continue;
+        // Extract package name (handle scoped packages)
+        let pkg;
+        if (rawValue.startsWith('@')) {
+          const parts = rawValue.split('/');
+          pkg = parts.slice(0, 2).join('/');
+        } else {
+          pkg = rawValue.split('/')[0];
+        }
+        if (isValidPackageName(pkg)) {
+          packages.add(pkg);
+        }
+      }
+    }
+
+    // Match single string extends: "package"
+    const extendsSingleRegex = /extends:\s+["'](@?[a-z0-9][-a-z0-9._]*(?:\/[a-z0-9][-a-z0-9._]*)?)["']/gi;
+    while ((match = extendsSingleRegex.exec(content)) !== null) {
+      const pkg = match[1];
+      if (pkg.includes(':')) continue;
+      if (pkg.startsWith('.') || pkg.startsWith('/')) continue;
+      if (isValidPackageName(pkg)) {
+        packages.add(pkg);
+      }
+    }
+  }
+
+  function scanDirectory(dir) {
+    if (!fs.existsSync(dir)) return;
+
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+
+        // Skip node_modules, dist, .git, and other non-source directories
+        if (entry.name === 'node_modules' || entry.name === 'dist' ||
+            entry.name === '.git' || entry.name === 'coverage') {
+          continue;
+        }
+
+        if (entry.isDirectory()) {
+          scanDirectory(fullPath);
+        } else if (entry.isFile() && (entry.name.endsWith('.yml') || entry.name.endsWith('.yaml'))) {
+          try {
+            const content = fs.readFileSync(fullPath, 'utf8');
+            extractYamlPackages(content);
+          } catch {
+            // Ignore files that can't be read
+          }
+        }
+      }
+    } catch {
+      // Ignore directories that can't be read
+    }
+  }
+
+  // Scan the entire service directory for YAML files
+  scanDirectory(directory);
+
+  return packages;
+}
+
+/**
  * Get transitive dependencies for workspace packages
  */
 function getWorkspaceTransitiveDeps(packageName, workspacePackageJsons, visited = new Set()) {
@@ -625,6 +721,14 @@ function main() {
     console.log('Skipping script dependency scan (library mode)');
   }
 
+  // Scan YAML files for package references (extends: directives, etc.)
+  console.log('\nScanning YAML files for package references...');
+  const yamlDeps = scanYamlFiles(serviceDir);
+  console.log(`Found ${yamlDeps.size} package references from YAML files`);
+  if (yamlDeps.size > 0) {
+    console.log('  YAML deps:', [...yamlDeps].join(', '));
+  }
+
   // Start with existing service dependencies
   const existingDeps = { ...servicePackageJson.dependencies };
   const requiredDeps = new Set();
@@ -641,6 +745,11 @@ function main() {
 
   // Add script dependencies
   for (const pkg of scriptDeps) {
+    requiredDeps.add(pkg);
+  }
+
+  // Add YAML file dependencies
+  for (const pkg of yamlDeps) {
     requiredDeps.add(pkg);
   }
 
@@ -741,6 +850,7 @@ function main() {
   console.log(`Scanned imports: ${scannedImports.size}`);
   console.log(`Shell script deps: ${shellDeps.size}`);
   console.log(`Script dependencies: ${scriptDeps.size}`);
+  console.log(`YAML file deps: ${yamlDeps.size}`);
   console.log(`Required dependencies (including transitive): ${requiredDeps.size}`);
   console.log(`Final dependencies: ${Object.keys(sortedDependencies).length}`);
 

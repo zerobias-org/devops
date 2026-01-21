@@ -1,5 +1,5 @@
 name: 'Publish Release Event'
 description: 'Publish a release event to the global event router'
 runs:
-  using: 'node24'
+  using: 'node20'
   main: 'dist/index.js'

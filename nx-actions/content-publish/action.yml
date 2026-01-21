@@ -146,12 +146,17 @@ runs:
         if npm run | grep -q "nx:publish"; then
           echo "had nx:publish running those"
           npx lerna version --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
+          # Capture packages that were versioned (will be published)
+          npx lerna list --since HEAD~1 --json > /tmp/published-packages.json
           npm run nx:publish
         else
           npx lerna publish --conventional-commits --conventional-graduate --yes
+          # Capture packages that were published
+          npx lerna list --since HEAD~1 --json > /tmp/published-packages.json
         fi
 
         echo "packages published"
+        echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
 
     - name: Update dist tags
       shell: bash
@@ -177,6 +182,7 @@ runs:
         NPM_TOKEN: ${{ inputs.publishToken }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
+        PUBLISHED_PACKAGES_FILE: ${{ env.PUBLISHED_PACKAGES_FILE }}
       run: |
         if [ -x scripts/postpublish.sh ]; then
           scripts/postpublish.sh
@@ -185,3 +191,5 @@ runs:
     - name: Release Announcement
       if: ${{ inputs.skip-publish-announcement != 'true' }}
       uses: zerobias-org/devops/nx-actions/release-announcement@main
+      with:
+        packages-file: ${{ env.PUBLISHED_PACKAGES_FILE }}

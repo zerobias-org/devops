@@ -13,6 +13,10 @@ inputs:
     description: 'Whether to publish release event to AWS Lambda'
     required: false
     default: 'true'
+  packages-file:
+    description: 'Path to JSON file containing published packages (optional, uses lerna list --since if not provided)'
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -36,6 +40,7 @@ runs:
         SINCE: ${{ inputs.since }}
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
+        PACKAGES_FILE: ${{ inputs.packages-file }}
 
     - name: Slack Notification
       uses: slackapi/slack-github-action@v2.1.1

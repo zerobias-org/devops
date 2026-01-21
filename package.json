@@ -36,12 +36,12 @@
   },
   "homepage": "https://github.com/zerobias-org/devops#readme",
   "overrides": {
-    "tar": "^7.5.3"
+    "tar": "^7.5.6"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
     "@types/node": "^22.0.0",
-    "tar": "^7.5.3",
+    "tar": "^7.5.6",
     "typescript": "^5.0.0",
     "yargs": "^18.0.0"
   },

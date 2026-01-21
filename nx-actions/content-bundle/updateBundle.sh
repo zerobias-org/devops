@@ -33,9 +33,23 @@ fi
 
 PACKAGES=$(npx lerna list --ndjson)
 DEPS=$(npx lerna list --json  | jq 'reduce .[] as $i ({}; .[$i.name] = $i.version)')
+
+# Get current dependencies before update
+OLD_DEPS=$(cat bundle/package.json | jq -S '.dependencies // {}')
+
 cat bundle/package.json | jq --argjson deps "$DEPS" '.dependencies = $deps' > bundle/package.json.new
 mv bundle/package.json.new bundle/package.json
 
+# Get new dependencies after update
+NEW_DEPS=$(cat bundle/package.json | jq -S '.dependencies // {}')
+
+# Only publish if dependencies changed
+if [ "$OLD_DEPS" = "$NEW_DEPS" ]; then
+  echo "No dependency changes detected, skipping bundle publish"
+  exit 0
+fi
+
+echo "Dependencies changed, publishing bundle update"
 cd bundle
 npm version patch
 npm i

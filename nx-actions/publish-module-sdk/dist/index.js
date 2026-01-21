@@ -27905,15 +27905,46 @@ async function main() {
     console.info('Running npm run docs');
     await exec.exec('npm', ['run', 'docs'], execOptions);
     if (!config.dryRun) {
-        console.info('Running npm publish');
-        execOptions.env = {
-            ...process.env,
-            NPM_TOKEN: core.getInput('publishToken') || '',
-        };
-        await exec.exec('npm', ['publish'], execOptions);
+        // Check if package version already exists
+        const fullPackageName = `@${publisher}/${packageName}@${version}`;
+        let versionExists = false;
+        try {
+            await exec.exec('npm', ['view', fullPackageName, 'version'], {
+                ...execOptions,
+                ignoreReturnCode: true,
+                silent: true,
+                listeners: {
+                    stdout: (data) => {
+                        if (data.toString().trim() === version) {
+                            versionExists = true;
+                        }
+                    },
+                },
+            });
+        }
+        catch {
+            // Package doesn't exist, which is fine
+        }
+        if (versionExists) {
+            console.info(`Package ${fullPackageName} already exists, skipping publish`);
+            core.setOutput('published', 'false');
+            core.setOutput('skipped', 'true');
+        }
+        else {
+            console.info('Running npm publish');
+            execOptions.env = {
+                ...process.env,
+                NPM_TOKEN: core.getInput('publishToken') || '',
+            };
+            await exec.exec('npm', ['publish'], execOptions);
+            core.setOutput('published', 'true');
+            core.setOutput('skipped', 'false');
+        }
     }
     else {
         console.info('Skipping npm publish, dryRun enabled');
+        core.setOutput('published', 'false');
+        core.setOutput('skipped', 'true');
     }
 }
 main().catch((error) => {

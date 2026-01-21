@@ -12,7 +12,6 @@
 
 **/.serverless
 serverless.yml
-**/dist/resources/**
 
 .terraform/
 .idea/
@@ -21,7 +20,11 @@ serverless.yml
 
 .rgignore
 .DS_Store
-**/dist/**
+
+# Ignore dist except for actions which need it
+tools/**/dist/**
+!actions/**/dist/**
+!nx-actions/**/dist/**
 
 .nx/**
 node_modules/

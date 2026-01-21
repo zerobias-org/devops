@@ -46,7 +46,7 @@ runs:
 
     - name: Publish Module
       id: publishModule
-      uses: zerobias-org/devops/nx-actions/publish-api-client-module@main
+      uses: zerobias-org/devops/nx-actions/publish-module-sdk@main
       with:
         package: ${{ inputs.package }}
         apiName: ${{ inputs.apiName }}

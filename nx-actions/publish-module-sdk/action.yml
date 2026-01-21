@@ -1,4 +1,4 @@
-name: 'Hub Module Client Publish Action'
+name: 'Module Sdk Publish Action'
 description: 'Publishes a Hub Module to act as a client for the given module'
 inputs:
   package:

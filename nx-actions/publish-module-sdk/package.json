@@ -1,0 +1,31 @@
+{
+  "name": "@zerobias-org/devops-actions-publish-module-sdk",
+  "version": "0.2.0",
+  "description": "Publish an SDK client for a ZeroBias module API",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "ncc build src/index.ts -o dist",
+    "clean": "rimraf dist/"
+  },
+  "author": "team@zerobias.com",
+  "license": "ISC",
+  "dependencies": {
+    "@actions/core": "^1.10.0",
+    "@actions/exec": "^1.1.1",
+    "@actions/github": "^5.1.1",
+    "camelcase": "^7.0.0",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.19.7",
+    "@vercel/ncc": "^0.38.0",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.9.3"
+  },
+  "files": [
+    "dist/",
+    "action.yml"
+  ]
+}

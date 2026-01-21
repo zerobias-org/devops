@@ -153,10 +153,12 @@ runs:
           # Check if lerna version made any changes to package.json files
           if git diff --name-only | grep -q 'package.json'; then
             echo "Version changes detected, capturing packages"
-            npx lerna list --since HEAD~1 --json > /tmp/published-packages.json
+            npx lerna changed --json > /tmp/published-packages.json
             echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
+            echo "HAS_VERSION_CHANGES=true" >> $GITHUB_ENV
           else
             echo "No version changes detected, skipping notifications"
+            echo "HAS_VERSION_CHANGES=false" >> $GITHUB_ENV
           fi
           npm run nx:publish
         else
@@ -165,14 +167,25 @@ runs:
           # Check if lerna publish made any changes
           if git diff --name-only | grep -q 'package.json'; then
             echo "Publish made changes, capturing packages"
-            npx lerna list --since HEAD~1 --json > /tmp/published-packages.json
+            npx lerna changed --json > /tmp/published-packages.json
             echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
+            echo "HAS_VERSION_CHANGES=true" >> $GITHUB_ENV
           else
             echo "No changes from publish"
+            echo "HAS_VERSION_CHANGES=false" >> $GITHUB_ENV
           fi
         fi
 
         echo "packages published"
+
+    - name: Commit version changes
+      if: env.HAS_VERSION_CHANGES == 'true'
+      uses: EndBug/add-and-commit@v9
+      with:
+        add: '.'
+        message: 'chore(release): bump version'
+        default_author: github_actions
+        push: true
 
     - name: Update dist tags
       shell: bash

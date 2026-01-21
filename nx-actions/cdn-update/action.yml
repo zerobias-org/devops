@@ -36,6 +36,7 @@ runs:
         aws-region: ${{ env.AWS_PUBLISHING_REGION }}
 
     - name: Install nx
+      shell: bash
       run: |
         npm install -g nx@20.5.0
       env:

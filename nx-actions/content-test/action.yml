@@ -57,6 +57,7 @@ runs:
         password: ${{ env.WRITE_TOKEN }}
 
     - name: Install nx
+      shell: bash
       run: |
         npm install -g nx@20.5.0
       env:

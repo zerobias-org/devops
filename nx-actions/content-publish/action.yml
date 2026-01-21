@@ -73,6 +73,7 @@ runs:
       uses: aws-actions/amazon-ecr-login@v1
 
     - name: Install nx
+      shell: bash
       run: |
         npm install -g nx@20.5.0
       env:

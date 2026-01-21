@@ -82,6 +82,7 @@ runs:
 
     - name: Determine base ref for nx affected
       id: base_ref
+      shell: bash
       run: |
         # Get the last publish tag for nx affected base reference
         LAST_PUBLISH_TAG=$(git describe --tags --abbrev=0 --match="*" 2>/dev/null || echo "")

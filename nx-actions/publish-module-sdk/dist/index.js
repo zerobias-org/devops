@@ -27711,11 +27711,11 @@ function generatePackageJson(moduleDir, config) {
             'import-artifact': 'sdk',
         },
         dependencies: {
-            '@zerobias-org/util-api-client-base': '1.0.10',
+            '@zerobias-org/util-api-client-base': '^1.0.10',
         },
         devDependencies: {
             '@redocly/cli': '^2.14.5',
-            '@zerobias-org/util-codegen': '^2.0.11',
+            '@zerobias-org/util-codegen': '^2.0.12',
             '@types/node': '^22.19.7',
             typescript: '^5.9.3',
         },

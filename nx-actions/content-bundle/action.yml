@@ -1,0 +1,46 @@
+name: 'Content Bundle'
+description: 'Runs to create a bundle a repo of zerobias-org content'
+inputs:
+  publishToken:
+    description: Token with permissions to publish packages
+    required: true
+  update-all:
+    description: 'Set to true to update all content in the repo'
+    required: false
+    default: 'false'
+runs:
+  using: "composite"
+  steps:
+    - name: Setup
+      shell: bash
+      run: |
+        echo "REPO_NAME=${{ github.event.repository.name }}" >> $GITHUB_ENV
+
+    - name: Update bundle
+      id: update
+      shell: bash
+      run: |
+        bash ${{ github.action_path }}/updateBundle.sh
+        echo "bundleName=$(cat ./bundle/package.json | jq -r '.name')" >> $GITHUB_OUTPUT
+        echo "bundleVersion=$(cat ./bundle/package.json | jq -r '.version')" >> $GITHUB_OUTPUT
+      env:
+        PUBLISH_TOKEN: ${{ inputs.publishToken }}
+
+    - uses: EndBug/add-and-commit@v9
+      with:
+        add: ./bundle
+        author_name: Marvin the Paranoid Android
+        author_email: ci@neverfail.com
+        message: 'chore: ⬆ update bundle'
+        tag: '${{ steps.update.outputs.bundleName }}@${{ steps.update.outputs.bundleVersion }}'
+
+    - name: Slack Notification
+      uses: rtCamp/action-slack-notify@master
+      env:
+        SLACK_COLOR: good
+        SLACK_WEBHOOK: ${{ env.SLACK_RELEASES_WEBHOOK }}
+        SLACK_ICON_EMOJI: ':robot:'
+        MSG_MINIMAL: 'true'
+        SLACK_TITLE: ':gear: new ${{ github.repository }} bundle published :tada:'
+        SLACK_MESSAGE: '${{ steps.update.outputs.bundleName }}@${{ steps.update.outputs.bundleVersion }}'
+        SLACK_FOOTER: ''

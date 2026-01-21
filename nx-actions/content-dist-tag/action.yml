@@ -1,0 +1,100 @@
+name: 'Content Dist Tag'
+description: 'Set the packages dist-tag based on labels'
+inputs:
+  since:
+    description: 'The ref to compare to determine what has released'
+    required: false
+    default: 'origin/main'
+runs:
+  using: "composite"
+  steps:
+    - name: check out code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ github.ref_name }}
+
+    - name: Apply dev tag
+      shell: bash
+      if: (github.ref_name == 'dev' || github.ref_name == 'qa')
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+      run: |
+        PACKAGES=$(npx lerna list --since ${{ inputs.since }} --ndjson | jq -c)
+        for package in $(echo $PACKAGES); do
+          NAME=$(echo $package | jq -r '.name')
+          VERSION=$(echo $package | jq -r '.version')
+          echo "Applying dev tag to $NAME@$VERSION"
+          npm dist-tag add $NAME@$VERSION dev
+        done
+
+    - name: Remove dev tag
+      shell: bash
+      if: (github.ref_name != 'dev' && github.ref_name != 'qa')
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+      run: |
+        PACKAGES=$(npx lerna list --since ${{ inputs.since }} --ndjson | jq -c)
+        for package in $(echo $PACKAGES); do
+          NAME=$(echo $package | jq -r '.name')
+          VERSION=$(echo $package | jq -r '.version')
+          echo "Removing dev tag to $NAME@$VERSION"
+          npm dist-tag rm $NAME@$VERSION dev || echo 'dev tag not present'
+        done
+
+
+    - name: Apply qa tag
+      shell: bash
+      if: github.ref_name == 'qa'
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+      run: |
+        PACKAGES=$(npx lerna list --since ${{ inputs.since }} --ndjson | jq -c)
+        for package in $(echo $PACKAGES); do
+          NAME=$(echo $package | jq -r '.name')
+          VERSION=$(echo $package | jq -r '.version')
+          echo "Applying qa tag to $NAME@$VERSION"
+          npm dist-tag add $NAME@$VERSION qa
+        done        
+
+    - name: Remove qa tag
+      shell: bash
+      if: github.ref_name != 'qa'
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+      run: |
+        PACKAGES=$(npx lerna list --since ${{ inputs.since }} --ndjson | jq -c)
+        for package in $(echo $PACKAGES); do
+          NAME=$(echo $package | jq -r '.name')
+          VERSION=$(echo $package | jq -r '.version')
+          echo "Removing qa tag to $NAME@$VERSION"
+          npm dist-tag rm $NAME@$VERSION qa || echo 'qa tag not present'
+        done
+
+    - name: Add skip-dataloader tag
+      shell: bash
+      if: contains(steps.pr.outputs.pr_labels, 'skip-dataloader')
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+      run: |
+        PACKAGES=$(npx lerna list --since ${{ inputs.since }} --ndjson | jq -c)
+        for package in $(echo $PACKAGES); do
+          NAME=$(echo $package | jq -r '.name')
+          VERSION=$(echo $package | jq -r '.version')
+          echo "Applying skip-dataloader tag to $NAME@$VERSION"
+          npm dist-tag add $NAME@$VERSION skip-dataloader
+        done
+
+    - name: Remove skip-dataloader tag
+      shell: bash
+      if: ${{ ! contains(steps.pr.outputs.pr_labels, 'skip-dataloader') }}
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+      run: |
+        PACKAGES=$(npx lerna list --since ${{ inputs.since }} --ndjson | jq -c)
+        for package in $(echo $PACKAGES); do
+          NAME=$(echo $package | jq -r '.name')
+          VERSION=$(echo $package | jq -r '.version')
+          echo "Removing skip-dataloader tag to $NAME@$VERSION"
+          npm dist-tag rm $NAME@$VERSION skip-dataloader || echo 'skip-dataloader tag not present'
+        done

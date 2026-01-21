@@ -1,0 +1,117 @@
+name: Publish Reusable
+
+on:
+  workflow_call:
+    inputs:
+      skip-publish-announcement:
+        description: 'Skips release announcement on content-publish'
+        type: string
+        required: false
+        default: 'false'
+
+env:
+  PGHOST: localhost
+  PGPORT: 15432
+  PGUSER: postgres
+  PGPASSWORD: postgres
+  PGDATABASE: nfa_test
+  SU_USER: postgres
+  SU_PASSWORD: postgres
+  SU_DB: postgres
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  AWS_DYNAMO_DB_TABLE: nfa-test
+  AWS_DYNAMO_DB_ACCESS_KEY_ID: DUMMYIDEXAMPLE
+  AWS_DYNAMO_DB_SECRET_ACCESS_KEY: DUMMYEXAMPLEKEY
+  AWS_DYNAMO_DB_REGION: us-west-2
+  AWS_DYNAMO_DB_ENDPOINT: http://localhost:18000
+  EVENT_SOURCE: Memory
+  SCHEDULER_SOURCE: Memory
+  PR_TOKEN: ${{ secrets.PR_TOKEN }}
+  READ_TOKEN: ${{ secrets.READ_TOKEN }}
+  WRITE_TOKEN: ${{ secrets.WRITE_TOKEN }}
+  SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
+  SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+  ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
+  DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+  AWS_PUBLISHING_ROLE: ${{ secrets.AWS_PUBLISHING_ROLE }}
+  AWS_PUBLISHING_REGION: ${{ secrets.AWS_PUBLISHING_REGION }}
+  USERNAME: ${{ secrets.USERNAME }}
+
+jobs:
+  publish:
+    services:
+      postgres:
+        image: supabase/postgres:14.1.0
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 15432:5432
+      dynamodb:
+        image: amazon/dynamodb-local
+        ports:
+          - 18000:8000
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish
+        uses: zerobias-org/devops/nx-actions/content-publish@main
+        with:
+          publishToken: ${{ secrets.GITHUB_TOKEN }}
+          skip-publish-announcement: ${{ inputs.skip-publish-announcement }}
+
+      - name: Update bundle
+        uses: zerobias-org/devops/nx-actions/content-bundle@main
+        with:
+          publishToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check for scripts/cdnUpdate.sh
+        id: cdnUpdateExists
+        run: |
+          if [ -x scripts/cdnUpdate.sh ]; then
+            echo "cdnUpdateExists=true"
+            echo "cdnUpdateExists=true" >> $GITHUB_OUTPUT
+          else
+            echo "cdnUpdateExists=false"
+            echo "cdnUpdateExists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        with:
+          hugo-version: '0.110.0'
+          extended: true
+
+      - name: configure aws tools creds
+        uses: aws-actions/configure-aws-credentials@v1
+        if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        with:
+          role-to-assume: ${{ env.AWS_PUBLISHING_ROLE }}
+          role-session-name: ${{ github.event.repository.name }}
+          aws-region: ${{ env.AWS_PUBLISHING_REGION }}
+
+      - name: CDN Update
+        if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        run: |
+          if [ -x scripts/cdnUpdate.sh ]; then
+            ./scripts/cdnUpdate.sh
+          fi
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          SINCE: HEAD~2
+
+      - name: Slack Notification
+        uses: rtCamp/action-slack-notify@master
+        if: failure()
+        env:
+          SLACK_WEBHOOK: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }} 
+          SLACK_ICON_EMOJI: ":fire"
+          MSG_MINIMAL: 'true'
+          SLACK_TITLE: ":fire: ${{ github.repository }} cdn update failed"
+          SLACK_MESSAGE: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          SLACK_COLOR: danger

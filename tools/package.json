@@ -26,6 +26,8 @@
     "triggerSchemaDocs": "src/triggerSchemaDocs.js",
     "dereference-product-infos": "scripts/dereference-product-infos.sh",
     "prepublish-standalone": "scripts/prepublish-standalone.sh",
+    "prepublish-init": "scripts/prepublish-init.sh",
+    "prepublishtest": "scripts/prepublishtest.sh",
     "publish": "scripts/publish.sh"
   }
 }

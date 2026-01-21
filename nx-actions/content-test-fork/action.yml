@@ -1,0 +1,174 @@
+name: 'Content Test Fork'
+description: 'Runs to test zerobias-org content packages from a fork'
+inputs:
+  run-integration-tests:
+    description: 'Set to true to run the integrationTest.sh script'
+    required: false
+    default: 'true'
+
+runs:
+  using: "composite"
+  steps:
+    - name: check out code
+      uses: actions/cache@v4
+      with:
+        path: .git
+        key: ${{ github.repository }}-git-folder
+
+    - name: check out code
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ github.event.pull_request.head.repo.full_name }}
+        fetch-depth: 0
+        ref: ${{ github.head_ref }}
+
+    # These two steps will only run if forked label exists on PR
+    - name: Get changed files
+      id: changed-files
+      uses: tj-actions/changed-files@6cb76d07bee4c9772c6882c06c37837bf82a04d3 # v46
+
+    #  Fail workflow if forked PR has modifies another other than the package dir
+    - name: List all changed files
+      shell: bash
+      env:
+        ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+      run: |
+        for file in ${ALL_CHANGED_FILES}; do
+          if [[ ! "$file" == "package/"* ]]; then
+            echo "Some file outside of the package/ directory was changed, this is not supported"
+            exit 1
+          fi
+        done
+
+    - name: Setup node
+      uses: zerobias-org/devops/nx-actions/setup-node@main
+
+    - name: install tooling
+      shell: bash
+      run: |
+        if ! command -v sem-apply &> /dev/null
+        then
+          gem install schema-evolution-manager
+        fi
+
+    - name: Setup Hugo
+      uses: peaceiris/actions-hugo@v2
+      with:
+        hugo-version: '0.110.0'
+        extended: true
+
+    - name: configure aws tools creds
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        role-to-assume: ${{ env.AWS_PUBLISHING_ROLE }}
+        role-session-name: ${{ github.event.repository.name }}
+        aws-region: ${{ env.AWS_PUBLISHING_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Login to GHCR
+      uses: docker/login-action@v1
+      with:
+        registry: ghcr.io
+        username: ${{ env.USERNAME }}
+        password: ${{ env.WRITE_TOKEN }}
+
+    - name: Install and build
+      shell: bash
+      run: |
+        cp .npmrc $HOME/.npmrc
+        npm ci
+        nx affected -t build --base=origin/main
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        JAVA_OPTS: "-Xms256m -Xmx1024m"
+
+    # Need at at least a file in there as download action will fail if no artifact found
+    # upload does not upload empty folders
+    - name: create github actions upload folder
+      shell: bash
+      run: |
+        mkdir ci-upload
+        echo "Upload your artifacts to this location for debugging or sharing accross jobs" > ci-upload/README.md
+      
+    - name: test:integration
+      if: inputs.run-integration-tests == 'true'
+      shell: bash
+      run: |
+        bash ${{ github.action_path }}/integrationTest.sh
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        DYNAMO_DB_TABLE: ${{ env.AWS_DYNAMO_DB_TABLE }}
+        AWS_ACCESS_KEY_ID: ${{ env.AWS_DYNAMO_DB_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ env.AWS_DYNAMO_DB_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ env.AWS_DYNAMO_DB_REGION }}
+        AWS_ENDPOINT: ${{ env.AWS_DYNAMO_DB_ENDPOINT }}
+        EVENT_SOURCE: Memory
+        SCHEDULER_SOURCE: Memory
+
+    - name: test:prepublish:init
+      shell: bash
+      run: |
+        nx affected -t prepublish-init --base=origin/main
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+
+    - name: test:prepublish
+      shell: bash
+      run: |
+        nx affected -t prepublishtest --base=origin/main
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        DYNAMO_DB_TABLE: ${{ env.AWS_DYNAMO_DB_TABLE }}
+        AWS_ACCESS_KEY_ID: ${{ env.AWS_DYNAMO_DB_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ env.AWS_DYNAMO_DB_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ env.AWS_DYNAMO_DB_REGION }}
+        AWS_ENDPOINT: ${{ env.AWS_DYNAMO_DB_ENDPOINT }}
+        EVENT_SOURCE: Memory
+        SCHEDULER_SOURCE: Memory
+
+    - name: test:tests
+      shell: bash
+      run: |
+        nx affected -t test:unit test:integration --base=origin/main
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        DYNAMO_DB_TABLE: ${{ env.AWS_DYNAMO_DB_TABLE }}
+        AWS_ACCESS_KEY_ID: ${{ env.AWS_DYNAMO_DB_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ env.AWS_DYNAMO_DB_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ env.AWS_DYNAMO_DB_REGION }}
+        AWS_ENDPOINT: ${{ env.AWS_DYNAMO_DB_ENDPOINT }}
+        EVENT_SOURCE: Memory
+        SCHEDULER_SOURCE: Memory
+
+    - name: test:postpublish
+      shell: bash
+      run: |
+        if [ -x scripts/postpublish.sh ]
+        then
+          bash scripts/postpublish.sh --dry-run
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        UPLOAD_FOLDER_NAME: ci-upload
+
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ci-upload
+        path: ci-upload/
+        if-no-files-found: warn
+        retention-days: 1
+
+    - name: Slack Notification
+      uses: rtCamp/action-slack-notify@master
+      if: failure()
+      env:
+        SLACK_WEBHOOK: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }} 
+        SLACK_ICON_EMOJI: ":fire"
+        MSG_MINIMAL: 'true'
+        SLACK_TITLE: ":fire: ${{ github.repository }} pr test failed"
+        SLACK_MESSAGE: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        SLACK_COLOR: danger

@@ -305,6 +305,7 @@ rules:
 
 `;
   fs.writeFileSync(path.join(moduleDir, '.redocly.yaml'), config);
+  console.log(`Wrote .redocly.yml config: ${config}`);
 }
 
 async function main(): Promise<void> {

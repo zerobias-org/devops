@@ -27576,10 +27576,8 @@ const external_node_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(impo
 var external_node_path_default = /*#__PURE__*/__nccwpck_require__.n(external_node_path_namespaceObject);
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
 var core = __nccwpck_require__(7484);
-var core_default = /*#__PURE__*/__nccwpck_require__.n(core);
 // EXTERNAL MODULE: ./node_modules/@actions/exec/lib/exec.js
 var exec = __nccwpck_require__(5236);
-var exec_default = /*#__PURE__*/__nccwpck_require__.n(exec);
 ;// CONCATENATED MODULE: ./src/index.ts
 
 
@@ -27608,15 +27606,15 @@ function initConfig() {
         };
     }
     else {
-        if (!core_default().getInput('package')) {
+        if (!core.getInput('package')) {
             throw new Error('Not initialized');
         }
         return {
-            pkg: core_default().getInput('package'),
-            apiPath: core_default().getInput('apiPath'),
-            moduleId: core_default().getInput('moduleId'),
-            apiName: camelCase(core_default().getInput('apiName')),
-            rawApiName: core_default().getInput('apiName'),
+            pkg: core.getInput('package'),
+            apiPath: core.getInput('apiPath'),
+            moduleId: core.getInput('moduleId'),
+            apiName: camelCase(core.getInput('apiName')),
+            rawApiName: core.getInput('apiName'),
             dryRun: false,
         };
     }
@@ -27772,10 +27770,10 @@ async function main() {
     console.info(`Created temporary directory ${apiDir}`);
     external_node_fs_default().writeFileSync(external_node_path_default().join(apiDir, '.npmrc'), npmrc);
     execOptions.cwd = apiDir;
-    await exec_default().exec('npm', ['pack', pkg], execOptions);
+    await exec.exec('npm', ['pack', pkg], execOptions);
     const tarballName = external_node_fs_default().readdirSync(apiDir).find((f) => f.endsWith('.tgz'));
     console.info(`Extracting tarball ${tarballName}`);
-    await exec_default().exec('tar', ['xfv', tarballName], execOptions);
+    await exec.exec('tar', ['xfv', tarballName], execOptions);
     const pkgDir = external_node_path_default().join(apiDir, 'package');
     const pkgJson = JSON.parse(external_node_fs_default().readFileSync(external_node_path_default().join(pkgDir, 'package.json'), 'utf-8'));
     console.info(`Found version ${pkgJson.version}`);
@@ -27786,10 +27784,10 @@ async function main() {
     const generatedDir = external_node_path_default().join(moduleDir, 'generated');
     external_node_fs_default().mkdirSync(generatedDir);
     // Set outputs
-    core_default().setOutput('packageId', `@${publisher}/${packageName}@${version}`);
-    core_default().setOutput('packageName', `@${publisher}/${packageName}`);
-    core_default().setOutput('packageVersion', version);
-    core_default().setOutput('dir', moduleDir);
+    core.setOutput('packageId', `@${publisher}/${packageName}@${version}`);
+    core.setOutput('packageName', `@${publisher}/${packageName}`);
+    core.setOutput('packageVersion', version);
+    core.setOutput('dir', moduleDir);
     // Copy API spec to generated directory
     external_node_fs_default().copyFileSync(external_node_path_default().join(pkgDir, apiFileName), external_node_path_default().join(generatedDir, 'api.yml'));
     // Copy connectionProfile if it exists
@@ -27806,26 +27804,26 @@ async function main() {
     // Install, build, and publish
     execOptions.cwd = moduleDir;
     console.info('Running npm install');
-    await exec_default().exec('npm', ['install'], execOptions);
+    await exec.exec('npm', ['install'], execOptions);
     console.info('Running npm run sync-meta');
-    await exec_default().exec('npm', ['run', 'sync-meta'], execOptions);
+    await exec.exec('npm', ['run', 'sync-meta'], execOptions);
     console.info('Running npm run build');
-    await exec_default().exec('npm', ['run', 'build'], execOptions);
+    await exec.exec('npm', ['run', 'build'], execOptions);
     console.info('Running npm run docs');
-    await exec_default().exec('npm', ['run', 'docs'], execOptions);
+    await exec.exec('npm', ['run', 'docs'], execOptions);
     if (!config.dryRun) {
         console.info('Running npm publish');
         execOptions.env = {
             ...process.env,
-            NPM_TOKEN: core_default().getInput('publishToken') || '',
+            NPM_TOKEN: core.getInput('publishToken') || '',
         };
-        await exec_default().exec('npm', ['publish'], execOptions);
+        await exec.exec('npm', ['publish'], execOptions);
     }
     else {
         console.info('Skipping npm publish, dryRun enabled');
     }
 }
 main().catch((error) => {
-    core_default().setFailed(error.message);
+    core.setFailed(error.message);
 });
 

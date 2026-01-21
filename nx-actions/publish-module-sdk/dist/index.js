@@ -27841,7 +27841,6 @@ rules:
 
 `;
     external_node_fs_default().writeFileSync(external_node_path_default().join(moduleDir, '.redocly.yaml'), config);
-    console.log(`Wrote .redocly.yml config: ${config}`);
 }
 async function main() {
     const config = initConfig();

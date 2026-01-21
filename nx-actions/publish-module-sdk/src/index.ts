@@ -140,7 +140,7 @@ function generatePackageJson(moduleDir: string, config: PackageJsonConfig): void
       'generate:inflate': `npx redocly bundle -o generated/full2.yml generated/full.yml && mv generated/full2.yml generated/full.yml && cp generated/full.yml ${apiFileName}`,
       'generate:api': 'hub-generator generate -g api-client -i generated/full.yml -o generated/ --skip-validate-spec',
       generate: 'npm run generate:full && npm run generate:inflate && npm run generate:api',
-      transpile: 'tsc',
+      transpile: 'tsc -b',
       build: 'npm run generate && npm run validate && npm run transpile',
       'docs:redoc': `npx redocly build-docs ${apiFileName} -o docs/index.html`,
       docs: 'npm run docs:redoc',

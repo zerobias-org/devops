@@ -27728,7 +27728,7 @@ function generateTsConfig(moduleDir) {
             module: 'NodeNext',
             moduleResolution: 'NodeNext',
             target: 'ES2022',
-            strict: true,
+            strict: false,
             noImplicitAny: false,
             declaration: true,
             esModuleInterop: true,

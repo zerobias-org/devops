@@ -143,20 +143,36 @@ runs:
       run: |
         echo `git status`
 
+        # Initialize empty packages file
+        echo "[]" > /tmp/published-packages.json
+
         if npm run | grep -q "nx:publish"; then
           echo "had nx:publish running those"
           npx lerna version --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
-          # Capture packages that were versioned (will be published)
-          npx lerna list --since HEAD~1 --json > /tmp/published-packages.json
+
+          # Check if lerna version made any changes to package.json files
+          if git diff --name-only | grep -q 'package.json'; then
+            echo "Version changes detected, capturing packages"
+            npx lerna list --since HEAD~1 --json > /tmp/published-packages.json
+            echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
+          else
+            echo "No version changes detected, skipping notifications"
+          fi
           npm run nx:publish
         else
           npx lerna publish --conventional-commits --conventional-graduate --yes
-          # Capture packages that were published
-          npx lerna list --since HEAD~1 --json > /tmp/published-packages.json
+
+          # Check if lerna publish made any changes
+          if git diff --name-only | grep -q 'package.json'; then
+            echo "Publish made changes, capturing packages"
+            npx lerna list --since HEAD~1 --json > /tmp/published-packages.json
+            echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
+          else
+            echo "No changes from publish"
+          fi
         fi
 
         echo "packages published"
-        echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
 
     - name: Update dist tags
       shell: bash

@@ -9,7 +9,9 @@ import exec from '@actions/exec';
 const repository = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}`;
 
 const npmrc = `
-@zerobias-org:registry=https://npm.pkg.github.com/
+@zerobias-org:registry=https://pkg.zerobias.org/
+//pkg.zerobias.org/:always-auth=true
+//pkg.zerobias.org/:_authToken=\${ZB_TOKEN}
 @zerobias-com:registry=https://npm.pkg.github.com/
 //npm.pkg.github.com/:always-auth=true
 //npm.pkg.github.com/:_authToken=\${NPM_TOKEN}
@@ -226,6 +228,7 @@ async function main(): Promise<void> {
     env: {
       ...process.env,
       NPM_TOKEN: process.env.READ_TOKEN || '',
+      ZB_TOKEN: process.env.ZB_TOKEN || '',
     },
   };
 

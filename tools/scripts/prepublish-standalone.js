@@ -654,6 +654,7 @@ function main() {
   const rootPackageJson = JSON.parse(fs.readFileSync(rootPackageJsonPath, 'utf8'));
   const rootDeps = rootPackageJson.dependencies || {};
   const rootDevDeps = rootPackageJson.devDependencies || {};
+  const rootOverrides = rootPackageJson.overrides || {};
 
   // Build map of workspace package names to their package.json content
   const workspacePackages = new Map(); // name -> version
@@ -878,12 +879,27 @@ function main() {
   const savings = allRootDepsCount - Object.keys(sortedDependencies).length;
   console.log(`\nDependency reduction: ${allRootDepsCount} -> ${Object.keys(sortedDependencies).length} (${savings} fewer)`);
 
+  // Log overrides from root
+  const overrideCount = Object.keys(rootOverrides).length;
+  if (overrideCount > 0) {
+    console.log(`\nCopying ${overrideCount} overrides from root package.json:`);
+    Object.entries(rootOverrides).forEach(([pkg, version]) => {
+      console.log(`  ${pkg}: ${typeof version === 'string' ? version : JSON.stringify(version)}`);
+    });
+  }
+
   if (dryRun) {
     console.log('\n[DRY RUN] No changes made');
     console.log('\nDependencies that would be included:');
     Object.entries(sortedDependencies).forEach(([pkg, version]) => {
       console.log(`  ${pkg}: ${version}`);
     });
+    if (overrideCount > 0) {
+      console.log('\nOverrides that would be included:');
+      Object.entries(rootOverrides).forEach(([pkg, version]) => {
+        console.log(`  ${pkg}: ${typeof version === 'string' ? version : JSON.stringify(version)}`);
+      });
+    }
     return;
   }
 
@@ -894,10 +910,19 @@ function main() {
   servicePackageJson.dependencies = sortedDependencies;
   delete servicePackageJson.devDependencies;
 
+  // Copy overrides from root package.json (for vulnerability fixes)
+  // Overrides apply to transitive dependencies - unused ones are safely ignored by npm
+  if (overrideCount > 0) {
+    servicePackageJson.overrides = rootOverrides;
+  }
+
   // Write updated package.json
   fs.writeFileSync(servicePackageJsonPath, JSON.stringify(servicePackageJson, null, 2) + '\n');
   console.log(`\nUpdated ${servicePackageJsonPath}`);
   console.log(`Total dependencies in standalone package: ${Object.keys(sortedDependencies).length}`);
+  if (overrideCount > 0) {
+    console.log(`Total overrides copied: ${overrideCount}`);
+  }
 }
 
 main();

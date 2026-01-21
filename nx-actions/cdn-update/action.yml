@@ -35,6 +35,13 @@ runs:
         role-session-name: ${{ github.event.repository.name }}
         aws-region: ${{ env.AWS_PUBLISHING_REGION }}
 
+    - name: Install nx
+      run: |
+        npm install -g nx@20.5.0
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
     - name: Install and build affected
       shell: bash
       run: |

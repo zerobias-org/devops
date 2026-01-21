@@ -72,12 +72,25 @@ runs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
 
+    - name: Determine base ref for nx affected
+      id: base_ref
+      run: |
+        # Get the last publish tag for nx affected base reference
+        LAST_PUBLISH_TAG=$(git describe --tags --abbrev=0 --match="*" 2>/dev/null || echo "")
+        if [ -z "$LAST_PUBLISH_TAG" ]; then
+          echo "No publish tag found, using origin/main~1 as base"
+          echo "BASE_REF=origin/main~1" >> $GITHUB_OUTPUT
+        else
+          echo "Using last publish tag as base: $LAST_PUBLISH_TAG"
+          echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
+        fi
+
     - name: Install and build affected
       shell: bash
       run: |
         cp .npmrc $HOME/.npmrc
         npm ci
-        nx affected -t build --base=origin/main
+        nx affected -t build --base=${{ steps.base_ref.outputs.BASE_REF }}
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}

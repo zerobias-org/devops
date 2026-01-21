@@ -25,6 +25,10 @@ outputs:
     description: The package name
   packageVersion:
     description: The package version
+  published:
+    description: Whether the package was published (true/false)
+  skipped:
+    description: Whether the publish was skipped because version already exists (true/false)
 runs:
   using: 'node20'
   main: 'dist/index.js'

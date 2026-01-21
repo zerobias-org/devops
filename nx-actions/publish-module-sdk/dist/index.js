@@ -27418,6 +27418,35 @@ module.exports = parseParams
 /******/ }
 /******/ 
 /************************************************************************/
+/******/ /* webpack/runtime/compat get default export */
+/******/ (() => {
+/******/ 	// getDefaultExport function for compatibility with non-harmony modules
+/******/ 	__nccwpck_require__.n = (module) => {
+/******/ 		var getter = module && module.__esModule ?
+/******/ 			() => (module['default']) :
+/******/ 			() => (module);
+/******/ 		__nccwpck_require__.d(getter, { a: getter });
+/******/ 		return getter;
+/******/ 	};
+/******/ })();
+/******/ 
+/******/ /* webpack/runtime/define property getters */
+/******/ (() => {
+/******/ 	// define getter functions for harmony exports
+/******/ 	__nccwpck_require__.d = (exports, definition) => {
+/******/ 		for(var key in definition) {
+/******/ 			if(__nccwpck_require__.o(definition, key) && !__nccwpck_require__.o(exports, key)) {
+/******/ 				Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
+/******/ 			}
+/******/ 		}
+/******/ 	};
+/******/ })();
+/******/ 
+/******/ /* webpack/runtime/hasOwnProperty shorthand */
+/******/ (() => {
+/******/ 	__nccwpck_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
+/******/ })();
+/******/ 
 /******/ /* webpack/runtime/compat */
 /******/ 
 /******/ if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = new URL('.', import.meta.url).pathname.slice(import.meta.url.match(/^file:\/\/\/\w:/) ? 1 : 0, -1) + "/";
@@ -27538,14 +27567,19 @@ function camelCase(input, options) {
 
 ;// CONCATENATED MODULE: external "node:fs"
 const external_node_fs_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs");
+var external_node_fs_default = /*#__PURE__*/__nccwpck_require__.n(external_node_fs_namespaceObject);
 ;// CONCATENATED MODULE: external "node:os"
 const external_node_os_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:os");
+var external_node_os_default = /*#__PURE__*/__nccwpck_require__.n(external_node_os_namespaceObject);
 ;// CONCATENATED MODULE: external "node:path"
 const external_node_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:path");
+var external_node_path_default = /*#__PURE__*/__nccwpck_require__.n(external_node_path_namespaceObject);
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
 var core = __nccwpck_require__(7484);
+var core_default = /*#__PURE__*/__nccwpck_require__.n(core);
 // EXTERNAL MODULE: ./node_modules/@actions/exec/lib/exec.js
 var exec = __nccwpck_require__(5236);
+var exec_default = /*#__PURE__*/__nccwpck_require__.n(exec);
 ;// CONCATENATED MODULE: ./src/index.ts
 
 
@@ -27555,7 +27589,9 @@ var exec = __nccwpck_require__(5236);
 
 const repository = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}`;
 const npmrc = `
-@zerobias-org:registry=https://npm.pkg.github.com/
+@zerobias-org:registry=https://pkg.zerobias.org/
+//pkg.zerobias.org/:always-auth=true
+//pkg.zerobias.org/:_authToken=\${ZB_TOKEN}
 @zerobias-com:registry=https://npm.pkg.github.com/
 //npm.pkg.github.com/:always-auth=true
 //npm.pkg.github.com/:_authToken=\${NPM_TOKEN}
@@ -27572,15 +27608,15 @@ function initConfig() {
         };
     }
     else {
-        if (!core.getInput('package')) {
+        if (!core_default().getInput('package')) {
             throw new Error('Not initialized');
         }
         return {
-            pkg: core.getInput('package'),
-            apiPath: core.getInput('apiPath'),
-            moduleId: core.getInput('moduleId'),
-            apiName: camelCase(core.getInput('apiName')),
-            rawApiName: core.getInput('apiName'),
+            pkg: core_default().getInput('package'),
+            apiPath: core_default().getInput('apiPath'),
+            moduleId: core_default().getInput('moduleId'),
+            apiName: camelCase(core_default().getInput('apiName')),
+            rawApiName: core_default().getInput('apiName'),
             dryRun: false,
         };
     }
@@ -27596,11 +27632,11 @@ function extractPackageInfoFromPackageName(pkg, rawApiName) {
     if (splitPackage[1]?.startsWith('module-')) {
         if (splitPackage[1].includes('@')) {
             apiFileName = `${splitPackage[1].split('@')[0]}.yml`;
-            packageName = `${splitPackage[1].split('@')[0]}-client-ts`;
+            packageName = `${splitPackage[1].split('@')[0]}-sdk`;
         }
         else {
             apiFileName = `${splitPackage[1]}.yml`;
-            packageName = `${splitPackage[1]}-client-ts`;
+            packageName = `${splitPackage[1]}-sdk`;
         }
     }
     return {
@@ -27686,7 +27722,7 @@ function generatePackageJson(moduleDir, config) {
             typescript: '^5.9.3',
         },
     };
-    external_node_fs_namespaceObject.writeFileSync(external_node_path_namespaceObject.join(moduleDir, 'package.json'), JSON.stringify(pkgJson, null, 2));
+    external_node_fs_default().writeFileSync(external_node_path_default().join(moduleDir, 'package.json'), JSON.stringify(pkgJson, null, 2));
 }
 function generateTsConfig(moduleDir) {
     const tsconfig = {
@@ -27704,7 +27740,7 @@ function generateTsConfig(moduleDir) {
         include: ['generated/**/*'],
         exclude: ['dist', 'node_modules'],
     };
-    external_node_fs_namespaceObject.writeFileSync(external_node_path_namespaceObject.join(moduleDir, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2));
+    external_node_fs_default().writeFileSync(external_node_path_default().join(moduleDir, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2));
 }
 function generateRedoclyConfig(moduleDir) {
     const config = `extends:
@@ -27713,7 +27749,7 @@ rules:
   no-unused-components: off
   operation-operationId-unique: off
 `;
-    external_node_fs_namespaceObject.writeFileSync(external_node_path_namespaceObject.join(moduleDir, '.redocly.yaml'), config);
+    external_node_fs_default().writeFileSync(external_node_path_default().join(moduleDir, '.redocly.yaml'), config);
 }
 async function main() {
     const config = initConfig();
@@ -27727,68 +27763,69 @@ async function main() {
         env: {
             ...process.env,
             NPM_TOKEN: process.env.READ_TOKEN || '',
+            ZB_TOKEN: process.env.ZB_TOKEN || '',
         },
     };
     console.info(`Creating SDK client for ${pkg}`);
     // Extract source module to get API spec
-    const apiDir = external_node_fs_namespaceObject.mkdtempSync(external_node_path_namespaceObject.join(external_node_os_namespaceObject.tmpdir(), 'zerobias-'));
+    const apiDir = external_node_fs_default().mkdtempSync(external_node_path_default().join(external_node_os_default().tmpdir(), 'zerobias-'));
     console.info(`Created temporary directory ${apiDir}`);
-    external_node_fs_namespaceObject.writeFileSync(external_node_path_namespaceObject.join(apiDir, '.npmrc'), npmrc);
+    external_node_fs_default().writeFileSync(external_node_path_default().join(apiDir, '.npmrc'), npmrc);
     execOptions.cwd = apiDir;
-    await exec.exec('npm', ['pack', pkg], execOptions);
-    const tarballName = external_node_fs_namespaceObject.readdirSync(apiDir).find((f) => f.endsWith('.tgz'));
+    await exec_default().exec('npm', ['pack', pkg], execOptions);
+    const tarballName = external_node_fs_default().readdirSync(apiDir).find((f) => f.endsWith('.tgz'));
     console.info(`Extracting tarball ${tarballName}`);
-    await exec.exec('tar', ['xfv', tarballName], execOptions);
-    const pkgDir = external_node_path_namespaceObject.join(apiDir, 'package');
-    const pkgJson = JSON.parse(external_node_fs_namespaceObject.readFileSync(external_node_path_namespaceObject.join(pkgDir, 'package.json'), 'utf-8'));
+    await exec_default().exec('tar', ['xfv', tarballName], execOptions);
+    const pkgDir = external_node_path_default().join(apiDir, 'package');
+    const pkgJson = JSON.parse(external_node_fs_default().readFileSync(external_node_path_default().join(pkgDir, 'package.json'), 'utf-8'));
     console.info(`Found version ${pkgJson.version}`);
     const { zbPackageName, moduleId, moduleRepository, version } = extractMetadataFromPackageJson(pkgJson, config);
     console.info(`Generating SDK client for ${pkg} with ${apiFileName}`);
     // Build SDK structure
-    const moduleDir = external_node_fs_namespaceObject.mkdtempSync(external_node_path_namespaceObject.join(external_node_os_namespaceObject.tmpdir(), `${publisher}-sdk-`));
-    const generatedDir = external_node_path_namespaceObject.join(moduleDir, 'generated');
-    external_node_fs_namespaceObject.mkdirSync(generatedDir);
+    const moduleDir = external_node_fs_default().mkdtempSync(external_node_path_default().join(external_node_os_default().tmpdir(), `${publisher}-sdk-`));
+    const generatedDir = external_node_path_default().join(moduleDir, 'generated');
+    external_node_fs_default().mkdirSync(generatedDir);
     // Set outputs
-    core.setOutput('packageId', `@${publisher}/${packageName}@${version}`);
-    core.setOutput('packageName', `@${publisher}/${packageName}`);
-    core.setOutput('packageVersion', version);
-    core.setOutput('dir', moduleDir);
+    core_default().setOutput('packageId', `@${publisher}/${packageName}@${version}`);
+    core_default().setOutput('packageName', `@${publisher}/${packageName}`);
+    core_default().setOutput('packageVersion', version);
+    core_default().setOutput('dir', moduleDir);
     // Copy API spec to generated directory
-    external_node_fs_namespaceObject.copyFileSync(external_node_path_namespaceObject.join(pkgDir, apiFileName), external_node_path_namespaceObject.join(generatedDir, 'api.yml'));
+    external_node_fs_default().copyFileSync(external_node_path_default().join(pkgDir, apiFileName), external_node_path_default().join(generatedDir, 'api.yml'));
     // Copy connectionProfile if it exists
-    const connProfilePath = external_node_path_namespaceObject.join(pkgDir, 'connectionProfile.yml');
-    if (external_node_fs_namespaceObject.existsSync(connProfilePath)) {
-        external_node_fs_namespaceObject.copyFileSync(connProfilePath, external_node_path_namespaceObject.join(moduleDir, 'connectionProfile.yml'));
+    const connProfilePath = external_node_path_default().join(pkgDir, 'connectionProfile.yml');
+    if (external_node_fs_default().existsSync(connProfilePath)) {
+        external_node_fs_default().copyFileSync(connProfilePath, external_node_path_default().join(moduleDir, 'connectionProfile.yml'));
     }
     // Generate config files
-    external_node_fs_namespaceObject.writeFileSync(external_node_path_namespaceObject.join(moduleDir, '.npmrc'), npmrc);
+    external_node_fs_default().writeFileSync(external_node_path_default().join(moduleDir, '.npmrc'), npmrc);
     generatePackageJson(moduleDir, { packageName, publisher, version, moduleId, zbPackageName, apiFileName, moduleRepository });
     generateTsConfig(moduleDir);
     generateRedoclyConfig(moduleDir);
-    console.info(`Directory listing for ${moduleDir}: ${external_node_fs_namespaceObject.readdirSync(moduleDir)}`);
+    console.info(`Directory listing for ${moduleDir}: ${external_node_fs_default().readdirSync(moduleDir)}`);
     // Install, build, and publish
     execOptions.cwd = moduleDir;
     console.info('Running npm install');
-    await exec.exec('npm', ['install'], execOptions);
+    await exec_default().exec('npm', ['install'], execOptions);
     console.info('Running npm run sync-meta');
-    await exec.exec('npm', ['run', 'sync-meta'], execOptions);
+    await exec_default().exec('npm', ['run', 'sync-meta'], execOptions);
     console.info('Running npm run build');
-    await exec.exec('npm', ['run', 'build'], execOptions);
+    await exec_default().exec('npm', ['run', 'build'], execOptions);
     console.info('Running npm run docs');
-    await exec.exec('npm', ['run', 'docs'], execOptions);
+    await exec_default().exec('npm', ['run', 'docs'], execOptions);
     if (!config.dryRun) {
         console.info('Running npm publish');
         execOptions.env = {
             ...process.env,
-            NPM_TOKEN: core.getInput('publishToken') || '',
+            NPM_TOKEN: core_default().getInput('publishToken') || '',
         };
-        await exec.exec('npm', ['publish'], execOptions);
+        await exec_default().exec('npm', ['publish'], execOptions);
     }
     else {
         console.info('Skipping npm publish, dryRun enabled');
     }
 }
 main().catch((error) => {
-    core.setFailed(error.message);
+    core_default().setFailed(error.message);
 });
 

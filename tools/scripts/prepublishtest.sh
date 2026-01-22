@@ -16,21 +16,37 @@ if [ ! -f "$package_path/package.json" ]; then
   exit 1
 fi
 
-# Handle hoisted node_modules - create symlink if local node_modules doesn't exist
-if [ ! -d "$package_path/node_modules" ]; then
-  # Search up for root node_modules (hoisted monorepo setup)
-  search_dir="$package_path"
-  while [ "$search_dir" != "/" ]; do
-    search_dir=$(dirname "$search_dir")
-    if [ -d "$search_dir/node_modules" ] && [ -f "$search_dir/package.json" ]; then
-      # Check if this is a workspace root (has workspaces in package.json)
-      if jq -e '.workspaces' "$search_dir/package.json" > /dev/null 2>&1; then
-        echo "Hoisted node_modules detected at $search_dir, creating symlink"
-        ln -sf "$search_dir/node_modules" "$package_path/node_modules"
-        break
-      fi
+# Handle hoisted node_modules - symlink missing packages from root
+# Find workspace root with hoisted node_modules
+ROOT_NODE_MODULES=""
+search_dir="$package_path"
+while [ "$search_dir" != "/" ]; do
+  search_dir=$(dirname "$search_dir")
+  if [ -d "$search_dir/node_modules" ] && [ -f "$search_dir/package.json" ]; then
+    if jq -e '.workspaces' "$search_dir/package.json" > /dev/null 2>&1; then
+      ROOT_NODE_MODULES="$search_dir/node_modules"
+      break
+    fi
+  fi
+done
+
+# If we found a root and local node_modules exists but may be incomplete
+if [ -n "$ROOT_NODE_MODULES" ]; then
+  mkdir -p "$package_path/node_modules"
+
+  # Symlink scoped packages from root if they don't exist locally
+  for scope in "@zerobias-org" "@zerobias-com" "@auditlogic" "@auditmation"; do
+    if [ -d "$ROOT_NODE_MODULES/$scope" ] && [ ! -d "$package_path/node_modules/$scope" ]; then
+      echo "Symlinking $scope from root node_modules"
+      ln -sf "$ROOT_NODE_MODULES/$scope" "$package_path/node_modules/$scope"
     fi
   done
+
+  # Also symlink .bin if missing
+  if [ -d "$ROOT_NODE_MODULES/.bin" ] && [ ! -d "$package_path/node_modules/.bin" ]; then
+    echo "Symlinking .bin from root node_modules"
+    ln -sf "$ROOT_NODE_MODULES/.bin" "$package_path/node_modules/.bin"
+  fi
 fi
 
 packagejson=$package_path/package.json

@@ -1,6 +1,6 @@
 {
   "name": "@zerobias-org/devops-tools",
-  "version": "1.0.26",
+  "version": "1.0.27",
   "description": "Collection of scripts and tools for ZeroBias devops",
   "type": "module",
   "repository": {

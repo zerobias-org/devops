@@ -9,13 +9,13 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: check out code
+    - name: Restore git cache
       uses: actions/cache@v4
       with:
         path: .git
         key: ${{ github.repository }}-git-folder
 
-    - name: check out code
+    - name: Checkout code
       uses: actions/checkout@v4
       with:
         repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -88,8 +88,10 @@ runs:
       run: |
         cp .npmrc $HOME/.npmrc
         npm ci
+        npm install -g @zerobias-org/devops-tools@latest
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
     - name: Detect changed packages
       id: detect_changes

@@ -35,12 +35,19 @@ runs:
         tag: '${{ steps.update.outputs.bundleName }}@${{ steps.update.outputs.bundleVersion }}'
 
     - name: Slack Notification
-      uses: rtCamp/action-slack-notify@master
-      env:
-        SLACK_COLOR: good
-        SLACK_WEBHOOK: ${{ env.SLACK_RELEASES_WEBHOOK }}
-        SLACK_ICON_EMOJI: ':robot:'
-        MSG_MINIMAL: 'true'
-        SLACK_TITLE: ':gear: new ${{ github.repository }} bundle published :tada:'
-        SLACK_MESSAGE: '${{ steps.update.outputs.bundleName }}@${{ steps.update.outputs.bundleVersion }}'
-        SLACK_FOOTER: ''
+      uses: slackapi/slack-github-action@v2.1.1
+      if: success()
+      with:
+        webhook: ${{ env.SLACK_RELEASES_WEBHOOK }}
+        webhook-type: incoming-webhook
+        payload: |
+          text: "New ${{ github.repository }} Bundle Published"
+          attachments:
+            - color: "#36a64f"
+              fallback: "New Bundle Published"
+              title: ":robot: New Bundle Published :tada:"
+              text: "${{ steps.update.outputs.bundleName }}@${{ steps.update.outputs.bundleVersion }}"
+              footer: "<https://github.com/${{ github.repository }}|${{ github.repository }}> • <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
+              mrkdwn_in:
+                - text
+                - footer

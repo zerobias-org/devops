@@ -96,31 +96,37 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        # Get package names for lerna scope
-        CHANGED_NAMES=$(npx get-changed-package-names HEAD~1 | tr '\n' ',' | sed 's/,$//')
+        # Get changed package names
+        CHANGED_NAMES=$(npx get-changed-package-names HEAD~1)
         if [ -z "$CHANGED_NAMES" ]; then
           echo "No package names found, skipping publish"
           exit 0
         fi
-        echo "Publishing packages: $CHANGED_NAMES"
+        echo "Publishing packages:"
+        echo "$CHANGED_NAMES"
+
+        # Build comma-separated list for lerna --force-publish
+        FORCE_PUBLISH=$(echo "$CHANGED_NAMES" | tr '\n' ',' | sed 's/,$//')
 
         if npm run | grep -q "nx:pr-publish"; then
           if [ -x scripts/pr-publish.sh ]; then
-            npx lerna version --scope "{$CHANGED_NAMES}" --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
+            npx lerna version --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
             npm run nx:pr-publish
           else
-            npx lerna publish --scope "{$CHANGED_NAMES}" --conventional-prerelease --preid rc --conventional-commits --yes --no-verify-access --pre-dist-tag rc --dist-tag rc
+            npx lerna publish --force-publish="$FORCE_PUBLISH" --conventional-prerelease --preid rc --conventional-commits --yes --no-verify-access --pre-dist-tag rc --dist-tag rc
           fi
         else
-          npx lerna publish --scope "{$CHANGED_NAMES}" --conventional-prerelease --preid rc --conventional-commits --yes --no-verify-access --pre-dist-tag rc --dist-tag rc
+          npx lerna publish --force-publish="$FORCE_PUBLISH" --conventional-prerelease --preid rc --conventional-commits --yes --no-verify-access --pre-dist-tag rc --dist-tag rc
         fi
 
     - name: Content Pre-release
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       uses: zerobias-org/devops/nx-actions/content-pre-release@main
-      with: 
+      with:
         since: HEAD~1
 
     - name: Post PR Publish
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
         if [ -x scripts/postprpublish.sh ]
@@ -131,13 +137,20 @@ runs:
       env:
         UPLOAD_FOLDER_PATH: ${{steps.download.outputs.download-path}}
 
-    - name: Slack Notification
-      uses: rtCamp/action-slack-notify@master
-      if: failure()
-      env:
-        SLACK_WEBHOOK: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
-        SLACK_ICON_EMOJI: ":fire"
-        MSG_MINIMAL: 'true'
-        SLACK_TITLE: ":fire: ${{ github.repository }} pr publish failed "
-        SLACK_MESSAGE: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-        SLACK_COLOR: danger
+    - name: Slack Notification on failure
+      uses: slackapi/slack-github-action@v2.1.1
+      if: failure() && env.SLACK_DEVOPS_NOTIFICATIONS != ''
+      with:
+        webhook: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
+        webhook-type: incoming-webhook
+        payload: |
+          text: "${{ github.repository }} PR Publish Failed"
+          attachments:
+            - color: "#ff0000"
+              fallback: "PR Publish Failed"
+              title: ":fire: ${{ github.repository }} PR Publish Failed"
+              text: "Workflow run failed"
+              footer: "<https://github.com/${{ github.repository }}|${{ github.repository }}> • <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
+              mrkdwn_in:
+                - text
+                - footer

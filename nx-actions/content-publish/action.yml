@@ -117,9 +117,9 @@ runs:
         else
           echo "Changed packages:"
           echo "$CHANGED_DIRS"
-          echo "CHANGED_DIRS<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGED_DIRS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Convert newlines to spaces for safe use in for loops
+          CHANGED_DIRS_INLINE=$(echo "$CHANGED_DIRS" | tr '\n' ' ')
+          echo "CHANGED_DIRS=$CHANGED_DIRS_INLINE" >> $GITHUB_OUTPUT
           echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
           echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
         fi

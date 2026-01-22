@@ -187,26 +187,33 @@ runs:
       run: |
         echo `git status`
 
-        # Get changed package names for scoped lerna operations
-        CHANGED_NAMES=$(npx get-changed-package-names "${{ steps.detect_changes.outputs.BASE_REF }}" | tr '\n' ',' | sed 's/,$//')
+        # Get changed package names for filtered lerna operations
+        CHANGED_NAMES=$(npx get-changed-package-names "${{ steps.detect_changes.outputs.BASE_REF }}")
         if [ -z "$CHANGED_NAMES" ]; then
           echo "No package names found, skipping publish"
           echo "HAS_VERSION_CHANGES=false" >> $GITHUB_ENV
           exit 0
         fi
-        echo "Publishing packages: $CHANGED_NAMES"
+        echo "Publishing packages:"
+        echo "$CHANGED_NAMES"
+
+        # Build filter args for lerna (--filter=pkg1 --filter=pkg2 ...)
+        FILTER_ARGS=""
+        for pkg in $CHANGED_NAMES; do
+          FILTER_ARGS="$FILTER_ARGS --filter=$pkg"
+        done
 
         # Initialize empty packages file
         echo "[]" > /tmp/published-packages.json
 
         if npm run | grep -q "nx:publish"; then
           echo "had nx:publish running those"
-          npx lerna version --scope "{$CHANGED_NAMES}" --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
+          npx lerna version $FILTER_ARGS --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
 
           # Check if lerna version made any changes to package.json files
           if git diff --name-only | grep -q 'package.json'; then
             echo "Version changes detected, capturing packages"
-            npx lerna changed --json > /tmp/published-packages.json
+            npx lerna changed --json > /tmp/published-packages.json || echo "[]" > /tmp/published-packages.json
             echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
             echo "HAS_VERSION_CHANGES=true" >> $GITHUB_ENV
           else
@@ -215,12 +222,12 @@ runs:
           fi
           npm run nx:publish
         else
-          npx lerna publish --scope "{$CHANGED_NAMES}" --conventional-commits --conventional-graduate --yes
+          npx lerna publish $FILTER_ARGS --conventional-commits --conventional-graduate --yes
 
           # Check if lerna publish made any changes
           if git diff --name-only | grep -q 'package.json'; then
             echo "Publish made changes, capturing packages"
-            npx lerna changed --json > /tmp/published-packages.json
+            npx lerna changed --json > /tmp/published-packages.json || echo "[]" > /tmp/published-packages.json
             echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
             echo "HAS_VERSION_CHANGES=true" >> $GITHUB_ENV
           else

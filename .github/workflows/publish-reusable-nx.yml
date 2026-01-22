@@ -8,6 +8,11 @@ on:
         type: string
         required: false
         default: 'false'
+      dispatch-client-publish:
+        description: 'Dispatch client-publish event after successful publish'
+        type: boolean
+        required: false
+        default: false
 
 env:
   PGHOST: localhost
@@ -59,6 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Publish
+        id: publish
         uses: zerobias-org/devops/nx-actions/content-publish@main
         with:
           publishToken: ${{ secrets.GITHUB_TOKEN }}
@@ -109,9 +115,44 @@ jobs:
         uses: rtCamp/action-slack-notify@master
         if: failure()
         env:
-          SLACK_WEBHOOK: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }} 
+          SLACK_WEBHOOK: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
           SLACK_ICON_EMOJI: ":fire"
           MSG_MINIMAL: 'true'
           SLACK_TITLE: ":fire: ${{ github.repository }} cdn update failed"
           SLACK_MESSAGE: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           SLACK_COLOR: danger
+
+      - name: Dispatch client-publish event
+        if: ${{ inputs.dispatch-client-publish && steps.publish.outputs.has_version_changes == 'true' }}
+        run: |
+          PACKAGES='${{ steps.publish.outputs.published_packages }}'
+          if [ -z "$PACKAGES" ] || [ "$PACKAGES" = "[]" ]; then
+            echo "No packages to dispatch"
+            exit 0
+          fi
+
+          # Transform packages to client-publish format
+          # Input: [{"name": "@scope/pkg", "version": "1.0.0", "location": "/path"}]
+          # Output: [{"name": "@scope/pkg@1.0.0", "version": "1.0.0", "apiName": "pkg", "apiPath": "pkg"}]
+          PAYLOAD=$(echo "$PACKAGES" | jq -c '{
+            "event_type": "client-publish",
+            "client_payload": {
+              "packages": [.[] | {
+                "name": (.name + "@" + .version),
+                "version": .version,
+                "apiName": (.name | split("-") | .[-1]),
+                "apiPath": (.name | split("-") | .[-1])
+              }]
+            }
+          }')
+
+          echo "Dispatching client-publish event to ${{ github.repository }}"
+          echo "Payload: $PAYLOAD"
+
+          curl -X POST \
+            --fail \
+            -H "Authorization: token ${{ env.DISPATCH_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-type: application/json" \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d "$PAYLOAD"

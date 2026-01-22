@@ -13,6 +13,17 @@ inputs:
     required: false
     default: 'false'
 
+outputs:
+  has_version_changes:
+    description: 'Whether any packages were versioned and published'
+    value: ${{ steps.set_outputs.outputs.has_version_changes }}
+  published_packages:
+    description: 'JSON array of published packages with name, version, location'
+    value: ${{ steps.set_outputs.outputs.published_packages }}
+  changed_dirs:
+    description: 'Space-separated list of changed package directories'
+    value: ${{ steps.detect_changes.outputs.CHANGED_DIRS }}
+
 runs:
   using: 'composite'
   steps:
@@ -241,6 +252,19 @@ runs:
             git push origin "$TAG_NAME" --force
           fi
         done
+
+    - name: Set action outputs
+      id: set_outputs
+      shell: bash
+      run: |
+        echo "has_version_changes=${{ env.HAS_VERSION_CHANGES || 'false' }}" >> $GITHUB_OUTPUT
+        if [ -n "${{ env.PUBLISHED_PACKAGES_FILE }}" ] && [ -f "${{ env.PUBLISHED_PACKAGES_FILE }}" ]; then
+          # Read packages file and output as single-line JSON
+          PACKAGES=$(cat "${{ env.PUBLISHED_PACKAGES_FILE }}" | jq -c '.')
+          echo "published_packages=$PACKAGES" >> $GITHUB_OUTPUT
+        else
+          echo "published_packages=[]" >> $GITHUB_OUTPUT
+        fi
 
     - name: Update dist tags
       shell: bash

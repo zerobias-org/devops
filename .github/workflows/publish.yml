@@ -82,7 +82,8 @@ jobs:
 
           # Detect packages with actual source changes
           # Using --hoisted mode since devops uses hoisted dependencies
-          CHANGED_DIRS=$(npx detect-changes "$BASE_REF" --hoisted)
+          # Note: Using direct path since this runs in the devops repo itself
+          CHANGED_DIRS=$(./tools/scripts/detect-changes.sh "$BASE_REF" --hoisted)
 
           if [ -z "$CHANGED_DIRS" ]; then
             echo "No packages changed (lock-file-only changes detected), skipping build/publish"

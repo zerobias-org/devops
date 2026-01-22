@@ -63,17 +63,83 @@ get_workspace_dirs() {
   fi
 }
 
+# Find all workspace packages that depend on the given package names
+# Usage: find_dependents "pkg-name-1 pkg-name-2 ..."
+# Output: List of package directories that depend on any of the input packages
+find_dependents() {
+  local changed_pkg_names="$1"
+
+  if [ -z "$changed_pkg_names" ]; then
+    return
+  fi
+
+  for pkg_dir in $(get_workspace_dirs); do
+    if [ ! -f "$pkg_dir/package.json" ]; then
+      continue
+    fi
+
+    # Get all dependencies from this package
+    local all_deps=$(jq -r '(.dependencies // {}) + (.devDependencies // {}) + (.peerDependencies // {}) | keys[]' "$pkg_dir/package.json" 2>/dev/null || true)
+
+    # Check if any of our changed packages are in the deps
+    for changed_name in $changed_pkg_names; do
+      if echo "$all_deps" | grep -qxF "$changed_name"; then
+        echo "$pkg_dir"
+        break
+      fi
+    done
+  done
+}
+
+# Expand changed packages to include dependents (recursively)
+# Usage: expand_with_dependents "dir1 dir2 ..."
+# Output: Original dirs plus any workspace packages that depend on them
+expand_with_dependents() {
+  local changed_dirs="$1"
+  local all_changed="$changed_dirs"
+  local prev_count=0
+  local curr_count=$(echo "$all_changed" | wc -w)
+
+  # Keep expanding until no new packages are found
+  while [ "$curr_count" -gt "$prev_count" ]; do
+    prev_count=$curr_count
+
+    # Get package names for currently changed dirs
+    local changed_names=""
+    for dir in $all_changed; do
+      if [ -f "$dir/package.json" ]; then
+        local name=$(jq -r '.name // empty' "$dir/package.json" 2>/dev/null)
+        if [ -n "$name" ]; then
+          changed_names="$changed_names $name"
+        fi
+      fi
+    done
+
+    # Find packages that depend on these
+    local dependents=$(find_dependents "$changed_names")
+
+    # Add to our list
+    if [ -n "$dependents" ]; then
+      all_changed=$(printf "%s\n%s" "$all_changed" "$dependents" | sort -u | tr '\n' ' ')
+    fi
+
+    curr_count=$(echo "$all_changed" | wc -w)
+  done
+
+  echo "$all_changed"
+}
+
 if [ "$HOISTED_MODE" = true ]; then
   # Hoisted mode: Check if package-lock.json changed and which projects are affected
-  (
+
   if [ "$UNCOMMITTED_MODE" = true ]; then
-    # Include uncommitted changes (staged + unstaged + untracked)
     CHANGED_FILES=$(git diff --name-only HEAD 2>/dev/null || true)
     UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
     CHANGED_FILES=$(printf "%s\n%s" "$CHANGED_FILES" "$UNTRACKED" | sort -u)
   else
     CHANGED_FILES=$(git diff --name-only "$BASE_REF" HEAD 2>/dev/null || true)
   fi
+
   LOCK_CHANGED=$(echo "$CHANGED_FILES" | grep -E "^package-lock\.json$" || true)
   ROOT_PKG_CHANGED=$(echo "$CHANGED_FILES" | grep -E "^package\.json$" || true)
 
@@ -91,14 +157,15 @@ if [ "$HOISTED_MODE" = true ]; then
       fi
     done | sort -u || true)
 
+  # Collect all changed packages (from lock file deps + source changes)
+  ALL_CHANGED_PKGS="$SOURCE_CHANGED_PKGS"
+
   # If package-lock.json or root package.json changed, check which projects are affected
   if [ -n "$LOCK_CHANGED" ] || [ -n "$ROOT_PKG_CHANGED" ]; then
-    # Get changed dependencies from package-lock.json or package.json
     CHANGED_DEPS=""
+
     if [ -n "$LOCK_CHANGED" ]; then
-      # Extract package names that changed in the lock file
       if [ "$UNCOMMITTED_MODE" = true ]; then
-        # Compare working tree to HEAD for uncommitted changes
         CHANGED_DEPS=$(git diff HEAD -- package-lock.json 2>/dev/null | \
           grep -E '^\+\s*"[^"]+":' | \
           grep -oE '"[^"]+":' | \
@@ -115,7 +182,6 @@ if [ "$HOISTED_MODE" = true ]; then
       fi
     fi
 
-    # Also check root package.json for dependency changes
     if [ -n "$ROOT_PKG_CHANGED" ]; then
       if [ "$UNCOMMITTED_MODE" = true ]; then
         PKG_DEPS=$(git diff HEAD -- package.json 2>/dev/null | \
@@ -142,35 +208,34 @@ if [ "$HOISTED_MODE" = true ]; then
         continue
       fi
 
-      # Run prepublish-standalone in dry-run mode to get actual deps
       if [ -f "$SCRIPT_DIR/prepublish-standalone.js" ]; then
-        # Get the deps that would be bundled for this package
         PROJECT_DEPS=$(node "$SCRIPT_DIR/prepublish-standalone.js" "$pkg_dir" "." --dry-run 2>/dev/null | \
           grep -E "^\s+[@a-zA-Z]" | \
           sed 's/:.*//g' | \
           tr -d ' ' || true)
 
-        # Check if any changed dep is used by this project
         if [ -n "$CHANGED_DEPS" ] && [ -n "$PROJECT_DEPS" ]; then
           for dep in $CHANGED_DEPS; do
             if echo "$PROJECT_DEPS" | grep -qF "$dep"; then
-              echo "$pkg_dir"
+              ALL_CHANGED_PKGS=$(printf "%s\n%s" "$ALL_CHANGED_PKGS" "$pkg_dir")
               break
             fi
           done
         fi
       else
-        # Fallback: if prepublish-standalone not available, include all workspaces when lock changes
-        echo "$pkg_dir"
+        ALL_CHANGED_PKGS=$(printf "%s\n%s" "$ALL_CHANGED_PKGS" "$pkg_dir")
       fi
     done
   fi
 
-  # Also include packages with direct source changes
-  if [ -n "$SOURCE_CHANGED_PKGS" ]; then
-    echo "$SOURCE_CHANGED_PKGS"
+  # Deduplicate initial list
+  INITIAL_CHANGED=$(echo "$ALL_CHANGED_PKGS" | sort -u | grep -v '^$' || true)
+
+  # Expand to include packages that depend on changed packages
+  if [ -n "$INITIAL_CHANGED" ]; then
+    EXPANDED=$(expand_with_dependents "$INITIAL_CHANGED")
+    echo "$EXPANDED" | tr ' ' '\n' | grep -v '^$' | sort -u
   fi
-  ) | sort -u
 
 else
   # Non-hoisted mode: Simple detection - ignore lock files, find changed packages
@@ -183,7 +248,7 @@ else
     CHANGED_FILES=$(git diff --name-only "$BASE_REF" HEAD 2>/dev/null || true)
   fi
 
-  echo "$CHANGED_FILES" | \
+  INITIAL_CHANGED=$(echo "$CHANGED_FILES" | \
     grep -v -E "$IGNORE_PATTERNS" | \
     grep -E "$PACKAGE_PATTERN" | \
     while read -r file; do
@@ -194,5 +259,11 @@ else
       if [ -f "$dir/package.json" ]; then
         echo "$dir"
       fi
-    done | sort -u || true
+    done | sort -u || true)
+
+  # Expand to include packages that depend on changed packages
+  if [ -n "$INITIAL_CHANGED" ]; then
+    EXPANDED=$(expand_with_dependents "$INITIAL_CHANGED")
+    echo "$EXPANDED" | tr ' ' '\n' | grep -v '^$' | sort -u
+  fi
 fi

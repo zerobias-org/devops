@@ -167,9 +167,25 @@ jobs:
           NODE_AUTH_TOKEN: ${{ env.GITHUB_TOKEN }}
 
       - name: Restore package.json state after publish
+        if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
         run: |
           echo "Restoring package.json files to pre-prepublish state..."
           cp -r /tmp/package-json-backup/./* .
+
+      - name: Create and push publish tag
+        if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+        run: |
+          # Create a tag for each published package to mark successful publish
+          for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+            if [ -f "$pkg/package.json" ]; then
+              PKG_NAME=$(jq -r '.name' "$pkg/package.json")
+              PKG_VERSION=$(jq -r '.version' "$pkg/package.json")
+              TAG_NAME="${PKG_NAME}@${PKG_VERSION}"
+              echo "Creating tag: $TAG_NAME"
+              git tag -f "$TAG_NAME" -m "Published $PKG_NAME version $PKG_VERSION"
+              git push origin "$TAG_NAME" --force
+            fi
+          done
 
       - name: Slack Notification on failure
         uses: slackapi/slack-github-action@v2.0.0

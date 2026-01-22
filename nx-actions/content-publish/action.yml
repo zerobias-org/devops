@@ -226,6 +226,22 @@ runs:
         default_author: github_actions
         push: true
 
+    - name: Create and push publish tags
+      if: env.HAS_VERSION_CHANGES == 'true'
+      shell: bash
+      run: |
+        # Create a tag for each published package to mark successful publish
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+          if [ -f "$pkg/package.json" ]; then
+            PKG_NAME=$(jq -r '.name' "$pkg/package.json")
+            PKG_VERSION=$(jq -r '.version' "$pkg/package.json")
+            TAG_NAME="${PKG_NAME}@${PKG_VERSION}"
+            echo "Creating tag: $TAG_NAME"
+            git tag -f "$TAG_NAME" -m "Published $PKG_NAME version $PKG_VERSION"
+            git push origin "$TAG_NAME" --force
+          fi
+        done
+
     - name: Update dist tags
       shell: bash
       env:

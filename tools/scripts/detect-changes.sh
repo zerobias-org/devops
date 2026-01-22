@@ -65,7 +65,7 @@ get_workspace_dirs() {
 
 if [ "$HOISTED_MODE" = true ]; then
   # Hoisted mode: Check if package-lock.json changed and which projects are affected
-
+  (
   if [ "$UNCOMMITTED_MODE" = true ]; then
     # Include uncommitted changes (staged + unstaged + untracked)
     CHANGED_FILES=$(git diff --name-only HEAD 2>/dev/null || true)
@@ -93,16 +93,46 @@ if [ "$HOISTED_MODE" = true ]; then
 
   # If package-lock.json or root package.json changed, check which projects are affected
   if [ -n "$LOCK_CHANGED" ] || [ -n "$ROOT_PKG_CHANGED" ]; then
-    # Get changed dependencies from package-lock.json
+    # Get changed dependencies from package-lock.json or package.json
     CHANGED_DEPS=""
     if [ -n "$LOCK_CHANGED" ]; then
       # Extract package names that changed in the lock file
-      CHANGED_DEPS=$(git diff "$BASE_REF" HEAD -- package-lock.json 2>/dev/null | \
-        grep -E '^\+\s*"[^"]+":' | \
-        grep -oE '"[^"]+":' | \
-        sed 's/"//g' | sed 's/://g' | \
-        grep -v "^version$\|^resolved$\|^integrity$\|^dev$\|^optional$\|^requires$\|^dependencies$" | \
-        sort -u || true)
+      if [ "$UNCOMMITTED_MODE" = true ]; then
+        # Compare working tree to HEAD for uncommitted changes
+        CHANGED_DEPS=$(git diff HEAD -- package-lock.json 2>/dev/null | \
+          grep -E '^\+\s*"[^"]+":' | \
+          grep -oE '"[^"]+":' | \
+          sed 's/"//g' | sed 's/://g' | \
+          grep -v "^version$\|^resolved$\|^integrity$\|^dev$\|^optional$\|^requires$\|^dependencies$\|^packages$\|^node_modules$" | \
+          sort -u || true)
+      else
+        CHANGED_DEPS=$(git diff "$BASE_REF" HEAD -- package-lock.json 2>/dev/null | \
+          grep -E '^\+\s*"[^"]+":' | \
+          grep -oE '"[^"]+":' | \
+          sed 's/"//g' | sed 's/://g' | \
+          grep -v "^version$\|^resolved$\|^integrity$\|^dev$\|^optional$\|^requires$\|^dependencies$\|^packages$\|^node_modules$" | \
+          sort -u || true)
+      fi
+    fi
+
+    # Also check root package.json for dependency changes
+    if [ -n "$ROOT_PKG_CHANGED" ]; then
+      if [ "$UNCOMMITTED_MODE" = true ]; then
+        PKG_DEPS=$(git diff HEAD -- package.json 2>/dev/null | \
+          grep -E '^\+.*"@?[a-zA-Z]' | \
+          grep -oE '"@?[a-zA-Z][^"]*"' | \
+          sed 's/"//g' | \
+          grep -v "^name$\|^version$\|^description$" | \
+          sort -u || true)
+      else
+        PKG_DEPS=$(git diff "$BASE_REF" HEAD -- package.json 2>/dev/null | \
+          grep -E '^\+.*"@?[a-zA-Z]' | \
+          grep -oE '"@?[a-zA-Z][^"]*"' | \
+          sed 's/"//g' | \
+          grep -v "^name$\|^version$\|^description$" | \
+          sort -u || true)
+      fi
+      CHANGED_DEPS=$(printf "%s\n%s" "$CHANGED_DEPS" "$PKG_DEPS" | sort -u)
     fi
 
     # For each workspace, check if it uses any of the changed deps
@@ -113,17 +143,17 @@ if [ "$HOISTED_MODE" = true ]; then
       fi
 
       # Run prepublish-standalone in dry-run mode to get actual deps
-      if [ -x "$SCRIPT_DIR/prepublish-standalone.sh" ] || [ -f "$SCRIPT_DIR/prepublish-standalone.js" ]; then
+      if [ -f "$SCRIPT_DIR/prepublish-standalone.js" ]; then
         # Get the deps that would be bundled for this package
         PROJECT_DEPS=$(node "$SCRIPT_DIR/prepublish-standalone.js" "$pkg_dir" "." --dry-run 2>/dev/null | \
-          grep -E "^\s+[a-zA-Z@]" | \
+          grep -E "^\s+[@a-zA-Z]" | \
           sed 's/:.*//g' | \
           tr -d ' ' || true)
 
         # Check if any changed dep is used by this project
         if [ -n "$CHANGED_DEPS" ] && [ -n "$PROJECT_DEPS" ]; then
           for dep in $CHANGED_DEPS; do
-            if echo "$PROJECT_DEPS" | grep -qE "^${dep}$"; then
+            if echo "$PROJECT_DEPS" | grep -qF "$dep"; then
               echo "$pkg_dir"
               break
             fi
@@ -133,13 +163,14 @@ if [ "$HOISTED_MODE" = true ]; then
         # Fallback: if prepublish-standalone not available, include all workspaces when lock changes
         echo "$pkg_dir"
       fi
-    done | sort -u
+    done
   fi
 
   # Also include packages with direct source changes
   if [ -n "$SOURCE_CHANGED_PKGS" ]; then
     echo "$SOURCE_CHANGED_PKGS"
   fi
+  ) | sort -u
 
 else
   # Non-hoisted mode: Simple detection - ignore lock files, find changed packages

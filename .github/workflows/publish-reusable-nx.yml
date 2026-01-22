@@ -156,3 +156,36 @@ jobs:
             -H "Content-type: application/json" \
             "https://api.github.com/repos/${{ github.repository }}/dispatches" \
             -d "$PAYLOAD"
+
+      - name: Sync qa and dev branches
+        if: success()
+        shell: bash
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+
+          # Check if qa branch exists
+          if git ls-remote --heads origin qa | grep -q qa; then
+            echo "Merging main into qa..."
+            git fetch origin qa
+            git checkout qa
+            git merge origin/main -m "chore: merge main into qa"
+            git push origin qa
+          else
+            echo "qa branch does not exist, skipping"
+          fi
+
+          # Check if dev branch exists
+          if git ls-remote --heads origin dev | grep -q dev; then
+            echo "Merging qa into dev..."
+            git fetch origin dev
+            git checkout dev
+            if git ls-remote --heads origin qa | grep -q qa; then
+              git merge origin/qa -m "chore: merge qa into dev"
+            else
+              git merge origin/main -m "chore: merge main into dev"
+            fi
+            git push origin dev
+          else
+            echo "dev branch does not exist, skipping"
+          fi

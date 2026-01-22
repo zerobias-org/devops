@@ -158,6 +158,8 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
+        # Install dataloader for prepublishtest scripts that need it
+        npm install -g @zerobias-com/platform-dataloader@latest
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ] && grep -q '"prepublishtest"' "$pkg/package.json"; then
             echo "Running prepublishtest for $pkg"

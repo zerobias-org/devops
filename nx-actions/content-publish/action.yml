@@ -162,10 +162,11 @@ runs:
         npm install -g @zerobias-com/platform-dataloader@latest
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ] && grep -q '"prepublishtest"' "$pkg/package.json"; then
-            echo "Installing dependencies for $pkg"
-            (cd "$pkg" && npm install)
-            echo "Running prepublishtest for $pkg"
-            (cd "$pkg" && npm run prepublishtest)
+            PKG_NAME=$(jq -r '.name' "$pkg/package.json")
+            echo "Installing dependencies for workspace $PKG_NAME"
+            npm install --workspace="$PKG_NAME"
+            echo "Running prepublishtest for $PKG_NAME"
+            npm run prepublishtest --workspace="$PKG_NAME"
           fi
         done
       env:

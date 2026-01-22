@@ -176,13 +176,20 @@ runs:
         if-no-files-found: warn
         retention-days: 1
 
-    - name: Slack Notification
-      uses: rtCamp/action-slack-notify@master
-      if: failure()
-      env:
-        SLACK_WEBHOOK: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }} 
-        SLACK_ICON_EMOJI: ":fire"
-        MSG_MINIMAL: 'true'
-        SLACK_TITLE: ":fire: ${{ github.repository }} pr test failed"
-        SLACK_MESSAGE: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-        SLACK_COLOR: danger
+    - name: Slack Notification on failure
+      uses: slackapi/slack-github-action@v2.1.1
+      if: failure() && env.SLACK_DEVOPS_NOTIFICATIONS != ''
+      with:
+        webhook: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
+        webhook-type: incoming-webhook
+        payload: |
+          text: "${{ github.repository }} PR Test Failed"
+          attachments:
+            - color: "#ff0000"
+              fallback: "PR Test Failed"
+              title: ":fire: ${{ github.repository }} PR Test Failed"
+              text: "Workflow run failed"
+              footer: "<https://github.com/${{ github.repository }}|${{ github.repository }}> • <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
+              mrkdwn_in:
+                - text
+                - footer

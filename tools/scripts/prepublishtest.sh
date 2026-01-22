@@ -16,6 +16,23 @@ if [ ! -f "$package_path/package.json" ]; then
   exit 1
 fi
 
+# Handle hoisted node_modules - create symlink if local node_modules doesn't exist
+if [ ! -d "$package_path/node_modules" ]; then
+  # Search up for root node_modules (hoisted monorepo setup)
+  search_dir="$package_path"
+  while [ "$search_dir" != "/" ]; do
+    search_dir=$(dirname "$search_dir")
+    if [ -d "$search_dir/node_modules" ] && [ -f "$search_dir/package.json" ]; then
+      # Check if this is a workspace root (has workspaces in package.json)
+      if jq -e '.workspaces' "$search_dir/package.json" > /dev/null 2>&1; then
+        echo "Hoisted node_modules detected at $search_dir, creating symlink"
+        ln -sf "$search_dir/node_modules" "$package_path/node_modules"
+        break
+      fi
+    fi
+  done
+fi
+
 packagejson=$package_path/package.json
 PGOPTIONS='--client-min-messages=warning'
 

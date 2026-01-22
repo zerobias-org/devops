@@ -9,11 +9,22 @@ CONTENT_PACKAGE="@zerobias-com/platform-content"
 # As of right now this is reduced to `schema` artifacts only
 declare -a changed_packages
 
-export NODE_MODULES_DIR=$CURRENT/..
-if [ ! -d "$NODE_MODULES_DIR/node_modules" ]; then
-  echo "Unable to locate node_modules at $NODE_MODULES_DIR"
+# Find node_modules - check parent dirs until we find it (handles hoisted monorepo setup)
+NODE_MODULES_DIR=""
+SEARCH_DIR="$CURRENT"
+while [ "$SEARCH_DIR" != "/" ]; do
+  if [ -d "$SEARCH_DIR/node_modules/@zerobias-org/devops-tools" ]; then
+    NODE_MODULES_DIR="$SEARCH_DIR/node_modules"
+    break
+  fi
+  SEARCH_DIR=$(dirname "$SEARCH_DIR")
+done
+
+if [ -z "$NODE_MODULES_DIR" ] || [ ! -d "$NODE_MODULES_DIR" ]; then
+  echo "Unable to locate node_modules with @zerobias-org/devops-tools"
   exit 1
 fi
+export NODE_MODULES_DIR
 
 PGDATABASE=nfa_catalog_template
 dropdb --if-exists $PGDATABASE;
@@ -44,10 +55,10 @@ tar xf zerobias-com-platform-content*.tgz
 echo "### Applying schema ${CONTENT_PACKAGE} to database ${PGDATABASE}"
 PGOPTIONS='--client-min-messages=warning'
 echo "### Dropping DB if exists: $PGDATABASE"
-${NODE_MODULES_DIR}/node_modules/@zerobias-org/devops-tools/scripts/db/drop.sh
+${NODE_MODULES_DIR}/@zerobias-org/devops-tools/scripts/db/drop.sh
 
 echo "### (Re-)Creating DB $PGDATABASE"
-${NODE_MODULES_DIR}/node_modules/@zerobias-org/devops-tools/scripts/db/create.sh
+${NODE_MODULES_DIR}/@zerobias-org/devops-tools/scripts/db/create.sh
 
 echo "### Loading ${CONTENT_PACKAGE}"
 psql < package/dist/content-full.sql > /dev/null

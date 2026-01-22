@@ -5,8 +5,8 @@
 set -e
 
 BASE_REF="${1:-HEAD~1}"
-SCRIPT_DIR="$(dirname "$0")"
 
-for pkg_dir in $("$SCRIPT_DIR/detect-changes.sh" "$BASE_REF"); do
+# Use npx to find detect-changes (handles both global and local installs)
+for pkg_dir in $(npx detect-changes "$BASE_REF"); do
   jq -r '.name' "$pkg_dir/package.json"
 done

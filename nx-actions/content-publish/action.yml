@@ -243,18 +243,30 @@ runs:
     - name: Create and push publish tags
       if: env.HAS_VERSION_CHANGES == 'true'
       shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.publishToken }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
         # Create a tag for each published package to mark successful publish
-        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
-          if [ -f "$pkg/package.json" ]; then
-            PKG_NAME=$(jq -r '.name' "$pkg/package.json")
-            PKG_VERSION=$(jq -r '.version' "$pkg/package.json")
-            TAG_NAME="${PKG_NAME}@${PKG_VERSION}"
-            echo "Creating tag: $TAG_NAME"
-            git tag -f "$TAG_NAME" -m "Published $PKG_NAME version $PKG_VERSION"
-            git push origin "$TAG_NAME" --force
-          fi
-        done
+        if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
+          for pkg in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do
+            if [ -f "$pkg/package.json" ]; then
+              PKG_NAME=$(jq -r '.name' "$pkg/package.json")
+              PKG_VERSION=$(jq -r '.version' "$pkg/package.json")
+              # Verify package was actually published before creating tag
+              if npm view "$PKG_NAME@$PKG_VERSION" version > /dev/null 2>&1; then
+                TAG_NAME="${PKG_NAME}@${PKG_VERSION}"
+                echo "Creating tag: $TAG_NAME"
+                git tag -f "$TAG_NAME" -m "Published $PKG_NAME version $PKG_VERSION"
+                git push origin "$TAG_NAME" --force || echo "Warning: Failed to push tag $TAG_NAME"
+              else
+                echo "Skipping tag for $PKG_NAME@$PKG_VERSION - not found in registry"
+              fi
+            fi
+          done
+        else
+          echo "No published packages file found, skipping tags"
+        fi
 
     - name: Set action outputs
       id: set_outputs
@@ -270,22 +282,32 @@ runs:
         fi
 
     - name: Update dist tags
+      if: env.HAS_VERSION_CHANGES == 'true'
       shell: bash
       env:
         NPM_TOKEN: ${{ inputs.publishToken }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
-        PACKAGES=$(npx lerna list --since HEAD~1 --ndjson | jq -c)
-        for package in $(echo $PACKAGES | jq -r -c '.location'); do
-          NAME=$(cat $package/package.json | jq -r '.name')
-          VERSION=$(cat $package/package.json | jq -r '.version') 
-          npm dist-tag add $NAME@$VERSION dev
-          npm dist-tag add $NAME@$VERSION qa
-          npm dist-tag add $NAME@$VERSION uat
-          npm dist-tag add $NAME@$VERSION rc
-        done
-
-        echo "dist tags updated"
+        if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
+          echo "Using packages from $PUBLISHED_PACKAGES_FILE"
+          for pkg in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do
+            NAME=$(jq -r '.name' "$pkg/package.json")
+            VERSION=$(jq -r '.version' "$pkg/package.json")
+            # Check if package version exists before adding dist tags
+            if npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
+              echo "Adding dist tags for $NAME@$VERSION"
+              npm dist-tag add "$NAME@$VERSION" dev || echo "Warning: Failed to add dev tag"
+              npm dist-tag add "$NAME@$VERSION" qa || echo "Warning: Failed to add qa tag"
+              npm dist-tag add "$NAME@$VERSION" uat || echo "Warning: Failed to add uat tag"
+              npm dist-tag add "$NAME@$VERSION" rc || echo "Warning: Failed to add rc tag"
+            else
+              echo "Skipping dist tags for $NAME@$VERSION - package not found in registry"
+            fi
+          done
+          echo "dist tags updated"
+        else
+          echo "No published packages file found, skipping dist tags"
+        fi
 
     - name: post publish
       shell: bash

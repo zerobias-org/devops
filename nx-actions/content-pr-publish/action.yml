@@ -92,32 +92,51 @@ runs:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         JAVA_OPTS: "-Xms256m -Xmx1024m"
 
-    - name: publish
+    - name: version
+      id: version
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
         # Get changed package names
         CHANGED_NAMES=$(npx get-changed-package-names HEAD~1)
         if [ -z "$CHANGED_NAMES" ]; then
-          echo "No package names found, skipping publish"
+          echo "No package names found, skipping version"
+          echo "HAS_VERSION_CHANGES=false" >> $GITHUB_OUTPUT
           exit 0
         fi
-        echo "Publishing packages:"
+        echo "Versioning packages:"
         echo "$CHANGED_NAMES"
 
         # Build comma-separated list for lerna --force-publish
         FORCE_PUBLISH=$(echo "$CHANGED_NAMES" | tr '\n' ',' | sed 's/,$//')
 
-        if npm run | grep -q "nx:pr-publish"; then
-          if [ -x scripts/pr-publish.sh ]; then
-            npx lerna version --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
-            npm run nx:pr-publish
-          else
-            npx lerna publish --force-publish="$FORCE_PUBLISH" --conventional-prerelease --preid rc --conventional-commits --yes --no-verify-access --pre-dist-tag rc --dist-tag rc
+        # Version with prerelease (rc) - separate from publish to avoid lerna publish bug
+        npx lerna version --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --conventional-commits --conventional-prerelease --preid rc --yes
+
+        echo "HAS_VERSION_CHANGES=true" >> $GITHUB_OUTPUT
+
+    - name: Commit version changes
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      uses: EndBug/add-and-commit@v9
+      with:
+        add: '.'
+        message: 'chore(release): bump version'
+        default_author: github_actions
+        push: true
+
+    - name: publish
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      shell: bash
+      run: |
+        # Publish each changed package with rc tag
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+          if [ -f "$pkg/package.json" ]; then
+            echo "Publishing $pkg with rc tag"
+            (cd "$pkg" && npm publish --tag rc --access public) || echo "Warning: Failed to publish $pkg"
           fi
-        else
-          npx lerna publish --force-publish="$FORCE_PUBLISH" --conventional-prerelease --preid rc --conventional-commits --yes --no-verify-access --pre-dist-tag rc --dist-tag rc
-        fi
+        done
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
 
     - name: Content Pre-release
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'

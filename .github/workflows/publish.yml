@@ -58,66 +58,108 @@ jobs:
           READ_TOKEN: ${{ env.READ_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
-      - name: Determine base ref for nx affected
-        id: base_ref
-        run: |
-          # Get the last publish tag for nx affected base reference
-          LAST_PUBLISH_TAG=$(git describe --tags --abbrev=0 --match="*" 2>/dev/null || echo "")
-          if [ -z "$LAST_PUBLISH_TAG" ]; then
-            echo "No publish tag found, using origin/main~1 as base"
-            echo "BASE_REF=origin/main~1" >> $GITHUB_OUTPUT
-          else
-            echo "Using last publish tag as base: $LAST_PUBLISH_TAG"
-            echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Install and build
+      - name: Install dependencies
         run: |
           npm ci
-          nx run-many -t build
         env:
           NPM_TOKEN: ${{ env.NPM_TOKEN }}
           READ_TOKEN: ${{ env.READ_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
-      - name: Version affected packages, then commit
+      - name: Determine base ref and detect changes
+        id: detect_changes
         run: |
-          AFFECTED=$(nx show projects --affected --base=${{ steps.base_ref.outputs.BASE_REF }} 2>/dev/null || echo "")
-          if [ -n "$AFFECTED" ]; then
-            for pkg in $AFFECTED; do
-              PKG_ROOT=$(nx show project "$pkg" --json 2>/dev/null | jq -r '.root' || echo "")
-              if [ -n "$PKG_ROOT" ] && [ -f "$PKG_ROOT/package.json" ]; then
-                cd "$PKG_ROOT"
-                npm version patch --no-git-tag-version
-                # npm run generate:bom
-                cd - > /dev/null
-              fi
-            done
-            git add -A "*/package.json" "package.json" 2>/dev/null || true
-            git commit -m "chore: bump versions [skip ci]" || echo "No version changes to commit"
-            git push
+          # Get the last publish tag for base reference
+          LAST_PUBLISH_TAG=$(git describe --tags --abbrev=0 --match="*" 2>/dev/null || echo "")
+          if [ -z "$LAST_PUBLISH_TAG" ]; then
+            echo "No publish tag found, using origin/main~1 as base"
+            BASE_REF="origin/main~1"
+          else
+            echo "Using last publish tag as base: $LAST_PUBLISH_TAG"
+            BASE_REF="$LAST_PUBLISH_TAG"
+          fi
+          echo "BASE_REF=$BASE_REF" >> $GITHUB_OUTPUT
+
+          # Detect packages with actual source changes
+          # Using --hoisted mode since devops uses hoisted dependencies
+          CHANGED_DIRS=$(npx detect-changes "$BASE_REF" --hoisted)
+
+          if [ -z "$CHANGED_DIRS" ]; then
+            echo "No packages changed (lock-file-only changes detected), skipping build/publish"
+            echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
+          else
+            echo "Changed packages:"
+            echo "$CHANGED_DIRS"
+            echo "CHANGED_DIRS<<EOF" >> $GITHUB_OUTPUT
+            echo "$CHANGED_DIRS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
           fi
         env:
           NPM_TOKEN: ${{ env.READ_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
+      - name: Build changed packages
+        if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+        run: |
+          for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+            echo "Building $pkg"
+            if [ -f "$pkg/package.json" ] && grep -q '"build"' "$pkg/package.json"; then
+              (cd "$pkg" && npm run build)
+            fi
+          done
+        env:
+          NPM_TOKEN: ${{ env.NPM_TOKEN }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+      - name: Version changed packages, then commit
+        if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+        run: |
+          for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+            if [ -f "$pkg/package.json" ]; then
+              echo "Bumping version for $pkg"
+              cd "$pkg"
+              npm version patch --no-git-tag-version
+              cd - > /dev/null
+            fi
+          done
+          git add -A "*/package.json" "package.json" 2>/dev/null || true
+          git commit -m "chore: bump versions [skip ci]" || echo "No version changes to commit"
+          git push
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
       - name: Save package.json state before prepublish - main
+        if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
         run: |
           echo "Saving package.json files before prepublish modifications..."
           mkdir -p /tmp/package-json-backup
           find . -name "package.json" -not -path "*/node_modules/*" -exec cp --parents {} /tmp/package-json-backup/ \;
 
       - name: Prepare standalone packages
+        if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
         run: |
-          # Run sequentially to avoid race conditions when reading/writing package.json files
-          nx affected -t nx:prepublish --base=${{ steps.base_ref.outputs.BASE_REF }} --parallel=1
+          for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+            if [ -f "$pkg/package.json" ] && grep -q '"nx:prepublish"' "$pkg/package.json"; then
+              echo "Running prepublish for $pkg"
+              (cd "$pkg" && npm run nx:prepublish)
+            fi
+          done
         env:
           NPM_TOKEN: ${{ env.READ_TOKEN }}
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
       - name: Publish packages
+        if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
         run: |
-          nx affected -t nx:publish --base=${{ steps.base_ref.outputs.BASE_REF }}
+          for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+            if [ -f "$pkg/package.json" ] && grep -q '"nx:publish"' "$pkg/package.json"; then
+              echo "Publishing $pkg"
+              (cd "$pkg" && npm run nx:publish)
+            fi
+          done
         env:
           ZB_TOKEN: ${{ env.ZB_TOKEN }}
           NPM_TOKEN: ${{ env.GITHUB_TOKEN }}

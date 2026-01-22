@@ -80,49 +80,78 @@ runs:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
-    - name: Determine base ref for nx affected
-      id: base_ref
-      shell: bash
-      run: |
-        # Get the last publish tag for nx affected base reference
-        LAST_PUBLISH_TAG=$(git describe --tags --abbrev=0 --match="*" 2>/dev/null || echo "")
-        if [ -z "$LAST_PUBLISH_TAG" ]; then
-          echo "No publish tag found, using origin/main~1 as base"
-          echo "BASE_REF=origin/main~1" >> $GITHUB_OUTPUT
-        else
-          echo "Using last publish tag as base: $LAST_PUBLISH_TAG"
-          echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Install and build affected
+    - name: Install dependencies
       shell: bash
       run: |
         cp .npmrc $HOME/.npmrc
         npm ci
-        nx affected -t build --base=${{ steps.base_ref.outputs.BASE_REF }}
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Detect changed packages
+      id: detect_changes
+      shell: bash
+      run: |
+        # Get last published tag
+        LAST_PUBLISH_TAG=$(git describe --tags --abbrev=0 --match="*" 2>/dev/null || echo "HEAD~1")
+        echo "Using base ref: $LAST_PUBLISH_TAG"
+
+        # Detect packages with actual source changes (ignoring lock files)
+        CHANGED_DIRS=$(npx detect-changes "$LAST_PUBLISH_TAG")
+        if [ -z "$CHANGED_DIRS" ]; then
+          echo "No packages changed, skipping build/publish"
+          echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
+        else
+          echo "Changed packages:"
+          echo "$CHANGED_DIRS"
+          echo "CHANGED_DIRS<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_DIRS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
+          echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Build changed packages
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+          echo "Building $pkg"
+          (cd "$pkg" && npm run build)
+        done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
         JAVA_OPTS: "-Xms256m -Xmx1024m"
 
     - name: prepublish:init
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        if [ -x scripts/prepublish-init.sh ]
-        then
-          bash scripts/prepublish-init.sh
-        fi
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+          if [ -f "$pkg/package.json" ] && grep -q '"prepublish-init"' "$pkg/package.json"; then
+            echo "Running prepublish-init for $pkg"
+            (cd "$pkg" && npm run prepublish-init)
+          fi
+        done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
     - name: prepublish
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        if npm run | grep -q "prepublishtest"; then
-          npm i -g @zerobias-com/platform-dataloader@latest
-          npm run prepublishtest
-        fi
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+          if [ -f "$pkg/package.json" ] && grep -q '"prepublishtest"' "$pkg/package.json"; then
+            echo "Running prepublishtest for $pkg"
+            (cd "$pkg" && npm run prepublishtest)
+          fi
+        done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
@@ -135,6 +164,7 @@ runs:
         SCHEDULER_SOURCE: Memory
 
     - name: publish
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       env:
         NPM_TOKEN: ${{ inputs.publishToken }}
@@ -143,12 +173,21 @@ runs:
       run: |
         echo `git status`
 
+        # Get changed package names for scoped lerna operations
+        CHANGED_NAMES=$(npx get-changed-package-names "${{ steps.detect_changes.outputs.BASE_REF }}" | tr '\n' ',' | sed 's/,$//')
+        if [ -z "$CHANGED_NAMES" ]; then
+          echo "No package names found, skipping publish"
+          echo "HAS_VERSION_CHANGES=false" >> $GITHUB_ENV
+          exit 0
+        fi
+        echo "Publishing packages: $CHANGED_NAMES"
+
         # Initialize empty packages file
         echo "[]" > /tmp/published-packages.json
 
         if npm run | grep -q "nx:publish"; then
           echo "had nx:publish running those"
-          npx lerna version --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
+          npx lerna version --scope "{$CHANGED_NAMES}" --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
 
           # Check if lerna version made any changes to package.json files
           if git diff --name-only | grep -q 'package.json'; then
@@ -162,7 +201,7 @@ runs:
           fi
           npm run nx:publish
         else
-          npx lerna publish --conventional-commits --conventional-graduate --yes
+          npx lerna publish --scope "{$CHANGED_NAMES}" --conventional-commits --conventional-graduate --yes
 
           # Check if lerna publish made any changes
           if git diff --name-only | grep -q 'package.json'; then

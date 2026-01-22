@@ -64,12 +64,42 @@ runs:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
-    - name: Install and build affected
+    - name: Install dependencies
       shell: bash
       run: |
         cp .npmrc $HOME/.npmrc
         npm ci
-        nx affected -t build --base=origin/main
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+
+    - name: Detect changed packages
+      id: detect_changes
+      shell: bash
+      run: |
+        # Detect packages with actual source changes (ignoring lock files)
+        CHANGED_DIRS=$(npx detect-changes origin/main)
+        if [ -z "$CHANGED_DIRS" ]; then
+          echo "No packages changed, skipping build"
+          echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
+        else
+          echo "Changed packages:"
+          echo "$CHANGED_DIRS"
+          echo "CHANGED_DIRS<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_DIRS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+
+    - name: Build changed packages
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+          echo "Building $pkg"
+          (cd "$pkg" && npm run build)
+        done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         JAVA_OPTS: "-Xms256m -Xmx1024m"

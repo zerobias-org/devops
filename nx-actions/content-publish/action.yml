@@ -315,6 +315,7 @@ runs:
         fi
 
     - name: post publish
+      if: env.HAS_VERSION_CHANGES == 'true'
       shell: bash
       env:
         NPM_TOKEN: ${{ inputs.publishToken }}
@@ -327,7 +328,7 @@ runs:
         fi
 
     - name: Release Announcement
-      if: ${{ inputs.skip-publish-announcement != 'true' }}
+      if: ${{ inputs.skip-publish-announcement != 'true' && env.HAS_VERSION_CHANGES == 'true' }}
       uses: zerobias-org/devops/nx-actions/release-announcement@main
       with:
         packages-file: ${{ env.PUBLISHED_PACKAGES_FILE }}

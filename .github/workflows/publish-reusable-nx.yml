@@ -71,6 +71,7 @@ jobs:
           skip-publish-announcement: ${{ inputs.skip-publish-announcement }}
 
       - name: Update bundle
+        if: steps.publish.outputs.has_version_changes == 'true'
         uses: zerobias-org/devops/nx-actions/content-bundle@main
         with:
           publishToken: ${{ secrets.GITHUB_TOKEN }}

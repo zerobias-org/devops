@@ -86,7 +86,7 @@ runs:
       run: |
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           echo "Building $pkg"
-          (cd "$pkg" && npm run build)
+          (nx build "$pkg")
         done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
@@ -128,6 +128,9 @@ runs:
       if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
       shell: bash
       run: |
+        # Initialize published packages file
+        echo "[]" > /tmp/published-packages.json
+
         # Publish each changed package with rc tag
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
@@ -135,14 +138,126 @@ runs:
             (cd "$pkg" && npm publish --tag rc --access public) || echo "Warning: Failed to publish $pkg"
           fi
         done
+
+        npx lerna changed --json > /tmp/published-packages.json || echo "[]" > /tmp/published-packages.json
+        echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
+        echo "Captured published packages:"
+        cat /tmp/published-packages.json
       env:
         NPM_TOKEN: ${{ env.WRITE_TOKEN }}
 
-    - name: Content Pre-release
-      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
-      uses: zerobias-org/devops/nx-actions/content-pre-release@main
-      with:
-        since: HEAD~1
+    - name: Apply dev tag
+      shell: bash
+      if: (github.ref_name == 'dev' || github.ref_name == 'qa') && steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+      run: |
+        if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
+          for pkg in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do
+            NAME=$(jq -r '.name' "$pkg/package.json")
+            VERSION=$(jq -r '.version' "$pkg/package.json")
+            echo "Applying dev tag to $NAME@$VERSION"
+            npm dist-tag add "$NAME@$VERSION" dev || echo "Warning: Failed to add dev tag"
+          done
+        else
+          echo "No published packages file found, skipping dev tag"
+        fi
+
+    - name: Remove dev tag
+      shell: bash
+      if: (github.ref_name != 'dev' && github.ref_name != 'qa') && steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+      run: |
+        if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
+          for pkg in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do
+            NAME=$(jq -r '.name' "$pkg/package.json")
+            VERSION=$(jq -r '.version' "$pkg/package.json")
+            echo "Removing dev tag from $NAME@$VERSION"
+            npm dist-tag rm "$NAME@$VERSION" dev || echo 'dev tag not present'
+          done
+        else
+          echo "No published packages file found, skipping dev tag removal"
+        fi
+
+
+    - name: Apply qa tag
+      shell: bash
+      if: github.ref_name == 'qa' && steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+      run: |
+        if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
+          for pkg in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do
+            NAME=$(jq -r '.name' "$pkg/package.json")
+            VERSION=$(jq -r '.version' "$pkg/package.json")
+            echo "Applying qa tag to $NAME@$VERSION"
+            npm dist-tag add "$NAME@$VERSION" qa || echo "Warning: Failed to add qa tag"
+          done
+        else
+          echo "No published packages file found, skipping qa tag"
+        fi        
+
+    - name: Remove qa tag
+      shell: bash
+      if: github.ref_name != 'qa' && steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+      run: |
+        if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
+          for pkg in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do
+            NAME=$(jq -r '.name' "$pkg/package.json")
+            VERSION=$(jq -r '.version' "$pkg/package.json")
+            echo "Removing qa tag from $NAME@$VERSION"
+            npm dist-tag rm "$NAME@$VERSION" qa || echo 'qa tag not present'
+          done
+        else
+          echo "No published packages file found, skipping qa tag removal"
+        fi
+
+    - name: Add skip-dataloader tag
+      shell: bash
+      if: contains(steps.pr.outputs.pr_labels, 'skip-dataloader') && steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+      run: |
+        if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
+          for pkg in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do
+            NAME=$(jq -r '.name' "$pkg/package.json")
+            VERSION=$(jq -r '.version' "$pkg/package.json")
+            echo "Applying skip-dataloader tag to $NAME@$VERSION"
+            npm dist-tag add "$NAME@$VERSION" skip-dataloader || echo "Warning: Failed to add skip-dataloader tag"
+          done
+        else
+          echo "No published packages file found, skipping skip-dataloader tag"
+        fi
+
+    - name: Remove skip-dataloader tag
+      shell: bash
+      if: ${{ ! contains(steps.pr.outputs.pr_labels, 'skip-dataloader') }} && steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+      run: |
+        if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
+          for pkg in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do
+            NAME=$(jq -r '.name' "$pkg/package.json")
+            VERSION=$(jq -r '.version' "$pkg/package.json")
+            echo "Removing skip-dataloader tag from $NAME@$VERSION"
+            npm dist-tag rm "$NAME@$VERSION" skip-dataloader || echo 'skip-dataloader tag not present'
+          done
+        else
+          echo "No published packages file found, skipping skip-dataloader tag removal"
+        fi
+
+    # Run only if just a tag workflow not a publish
+    - name: Post Pre Release
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      shell: bash
+      run: |
+        if [ -x scripts/postprerelease.sh ]
+        then
+          bash scripts/postprerelease.sh
+        fi
 
     - name: Post PR Publish
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
@@ -155,6 +270,13 @@ runs:
         fi
       env:
         UPLOAD_FOLDER_PATH: ${{steps.download.outputs.download-path}}
+
+    - name: Release Announcement
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      uses: zerobias-org/devops/nx-actions/release-announcement@main
+      with:
+        packages-file: ${{ env.PUBLISHED_PACKAGES_FILE }}
+
 
     - name: Slack Notification on failure
       uses: slackapi/slack-github-action@v2.1.1

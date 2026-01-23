@@ -101,7 +101,7 @@ runs:
       run: |
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           echo "Building $pkg"
-          (cd "$pkg" && npm run build)
+          (nx build "$pkg")
         done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
@@ -134,17 +134,9 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        # Check root-level script first
         if [ -x scripts/prepublish-init.sh ]; then
           bash scripts/prepublish-init.sh
         fi
-        # Then check per-package scripts
-        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
-          if [ -f "$pkg/package.json" ] && grep -q '"prepublish-init"' "$pkg/package.json"; then
-            echo "Running prepublish-init for $pkg"
-            (cd "$pkg" && npm run prepublish-init)
-          fi
-        done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
 

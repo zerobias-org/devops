@@ -101,7 +101,7 @@ runs:
       run: |
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           echo "Building $pkg"
-          (nx build "$pkg")
+          (nx nx:build "$pkg")
         done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
@@ -145,10 +145,6 @@ runs:
       shell: bash
       run: |
         npm i -g @zerobias-com/platform-dataloader@latest
-        # Check root-level script first
-        if npm run | grep -q "prepublishtest"; then
-          npm run prepublishtest
-        fi
         # Then check per-package scripts
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ] && grep -q '"prepublishtest"' "$pkg/package.json"; then

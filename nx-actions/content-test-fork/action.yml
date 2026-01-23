@@ -27,15 +27,15 @@ runs:
       id: changed-files
       uses: tj-actions/changed-files@6cb76d07bee4c9772c6882c06c37837bf82a04d3 # v46
 
-    #  Fail workflow if forked PR has modifies another other than the package dir
+    #  Fail workflow if forked PR modifies files other than package dir or package-lock.json
     - name: List all changed files
       shell: bash
       env:
         ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
       run: |
         for file in ${ALL_CHANGED_FILES}; do
-          if [[ ! "$file" == "package/"* ]]; then
-            echo "Some file outside of the package/ directory was changed, this is not supported"
+          if [[ ! "$file" == "package/"* ]] && [[ "$file" != "package-lock.json" ]]; then
+            echo "File '$file' is outside of the package/ directory and is not package-lock.json, this is not supported"
             exit 1
           fi
         done

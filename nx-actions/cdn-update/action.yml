@@ -1,5 +1,5 @@
 name: 'CDN Update'
-description: 'Publish new or udpated files to the cdn'
+description: 'Publish new or updated files to the cdn'
 inputs:
   update-all:
     description: 'Set to true to update all content in the repo'
@@ -9,48 +9,58 @@ inputs:
     description: 'S3 bucket to upload to'
     required: false
     default: 'auditmation-cdn'
+  changed-dirs:
+    description: 'Space-separated list of changed package directories (optional, will detect if not provided)'
+    required: false
+    default: ''
 runs:
   using: "composite"
   steps:
-    - name: check out code
-      uses: actions/cache@v4
-      with:
-        path: .git
-        key: ${{ github.repository }}-git-folder
-
-    - name: check out code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
     - name: Configure AWS
       uses: aws-actions/configure-aws-credentials@v4
-      if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
       with:
         role-to-assume: arn:aws:iam::961260934100:role/github-actions-publishing-role
         role-session-name: ${{ github.event.repository.name }}
         aws-region: us-east-1
 
-    - name: Update all logos
+    - name: save tools profile
+      shell: bash
+      run: |
+        aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID --profile tools
+        aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY --profile tools
+        aws configure set aws_session_token $AWS_SESSION_TOKEN --profile tools
+
+    - name: Update logos
       shell: bash
       run: |
         if [ "$UPDATE_ALL" == "true" ]; then
           echo "Updating all cdn content"
-          PACKAGES=$(npx lerna list --json)
-        else 
-          echo "Updating changed cdn content"
-          PACKAGES=$(npx lerna list --json --since HEAD~1)
+          # Find all packages with package.json
+          PACKAGE_DIRS=$(find packages package -maxdepth 4 -name "package.json" -exec dirname {} \; 2>/dev/null | sort -u)
+        elif [ -n "$CHANGED_DIRS_INPUT" ]; then
+          echo "Using provided changed directories"
+          PACKAGE_DIRS="$CHANGED_DIRS_INPUT"
+        else
+          echo "Detecting changed cdn content"
+          # Get last published tag as base ref
+          LAST_PUBLISH_TAG=$(git describe --tags --abbrev=0 --match="*" 2>/dev/null || echo "HEAD~1")
+          PACKAGE_DIRS=$(npx detect-changes "$LAST_PUBLISH_TAG" 2>/dev/null || echo "")
         fi
 
-        # Update logos
-        echo $PACKAGES | jq -cr '.[].location' | while read pkg; do
+        if [ -z "$PACKAGE_DIRS" ]; then
+          echo "No packages to update"
+          exit 0
+        fi
+
+        # Update logos for each package
+        for pkg in $PACKAGE_DIRS; do
           logo=""
           if [ -f "$pkg/logo.svg" ]; then
             logo="$pkg/logo.svg"
           elif [ -f "$pkg/logo.png" ]; then
             logo="$pkg/logo.png"
           fi
-          
+
           if [ "$logo" != "" ] && [ -f "$pkg/index.yml" ]; then
             echo "Updating $pkg logo"
             filename=$(echo $logo | sed 's/^.*package\///')
@@ -65,6 +75,7 @@ runs:
       env:
         UPDATE_ALL: ${{ inputs.update-all }}
         CDN_BUCKET: ${{ inputs.cdn-bucket }}
+        CHANGED_DIRS_INPUT: ${{ inputs.changed-dirs }}
 
     - uses: EndBug/add-and-commit@v9
       with:

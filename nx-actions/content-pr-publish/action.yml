@@ -21,16 +21,17 @@ runs:
     - name: Setup Hugo
       uses: peaceiris/actions-hugo@v2
       with:
-        hugo-version: '0.110.0'
+        hugo-version: '0.117.0'
         extended: true
 
-    - name: configure git user
+    - name: Configure git user
       shell: bash
       run: |
         git config user.name github-actions
         git config user.email github-actions@github.com
 
-    - uses: actions/download-artifact@v4
+    - name: Download artifact
+      uses: actions/download-artifact@v4
       continue-on-error: true
       id: download
       with:

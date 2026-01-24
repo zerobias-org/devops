@@ -75,6 +75,8 @@ jobs:
           path: gh-actions
           secrets: |
             operations-kv/data/ci/github readPackagesToken | NPM_TOKEN;
+            operations-kv/data/ci/github readPackagesToken | READ_TOKEN;
+            operations-kv/data/ci/github readPackagesToken | GITHUB_TOKEN;
             operations-kv/data/ci/slack devopsNotifications | SLACK_DEVOPS_NOTIFICATIONS;
             operations-kv/data/ci/github docsDeploymentToken | DISPATCH_TOKEN;
             operations-kv/data/ci/slack releasesWebhook | SLACK_RELEASES_WEBHOOK;

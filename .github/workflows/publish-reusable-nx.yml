@@ -94,13 +94,13 @@ jobs:
           hugo-version: '0.110.0'
           extended: true
 
-      - name: configure aws tools creds
-        uses: aws-actions/configure-aws-credentials@v1
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
         if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
         with:
-          role-to-assume: ${{ env.AWS_PUBLISHING_ROLE }}
+          role-to-assume: arn:aws:iam::961260934100:role/github-actions-publishing-role
           role-session-name: ${{ github.event.repository.name }}
-          aws-region: ${{ env.AWS_PUBLISHING_REGION }}
+          aws-region: us-east-1
 
       - name: CDN Update
         if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}

@@ -40,10 +40,26 @@ runs:
 
     - uses: zerobias-org/devops/nx-actions/setup-node@main
 
+    - name: Import Secrets
+      uses: hashicorp/vault-action@v2.4.3
+      with:
+        method: jwt
+        url: ${{ secrets.VAULT_ADDR }}
+        role: publishing-role
+        path: gh-actions
+        secrets: |
+          operations-kv/data/ci/github readPackagesToken | NPM_TOKEN;
+          operations-kv/data/ci/slack devopsNotifications | SLACK_DEVOPS_NOTIFICATIONS;
+          operations-kv/data/ci/github docsDeploymentToken | DISPATCH_TOKEN;
+          operations-kv/data/ci/slack releasesWebhook | SLACK_RELEASES_WEBHOOK;
+          operations-kv/data/ci/github username | USERNAME ;
+          operations-kv/data/ci/github writePackagesToken | WRITE_TOKEN ;
+          operations-kv/data/ci/github zb-token | ZB_TOKEN;
+
     - name: Setup Hugo
       uses: peaceiris/actions-hugo@v2
       with:
-        hugo-version: '0.110.0'
+        hugo-version: '0.117.0'
         extended: true
 
     - name: CDN Update
@@ -57,12 +73,13 @@ runs:
         git config --global user.email "ci@neverfail.com"
         git config --global user.name "@$GITHUB_ACTOR"
 
-    - name: configure aws tools creds
-      uses: aws-actions/configure-aws-credentials@v2
+    - name: Configure AWS
+      uses: aws-actions/configure-aws-credentials@v4
+      if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
       with:
-        role-to-assume: ${{ env.AWS_PUBLISHING_ROLE }}
+        role-to-assume: arn:aws:iam::961260934100:role/github-actions-publishing-role
         role-session-name: ${{ github.event.repository.name }}
-        aws-region: ${{ env.AWS_PUBLISHING_REGION }}
+        aws-region: us-east-1
 
     - name: save tools profile
       shell: bash

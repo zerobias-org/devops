@@ -138,7 +138,8 @@ runs:
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
             echo "Publishing $pkg with rc tag"
-            (cd "$pkg" && npm publish --tag rc --access public) || echo "Warning: Failed to publish $pkg"
+            # Generate package-lock.json for the package before publishing
+            (cd "$pkg" && npm install --package-lock-only && npm publish --tag rc --access public) || echo "Warning: Failed to publish $pkg"
           fi
         done
 

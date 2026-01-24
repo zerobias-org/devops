@@ -68,6 +68,23 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.1'
+          
+      - name: Import Secrets
+        uses: hashicorp/vault-action@v2.4.3
+        with:
+          method: jwt
+          url: ${{ secrets.VAULT_ADDR }}
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/ci/github readPackagesToken | NPM_TOKEN;
+            operations-kv/data/ci/slack devopsNotifications | SLACK_DEVOPS_NOTIFICATIONS;
+            operations-kv/data/ci/github docsDeploymentToken | DISPATCH_TOKEN;
+            operations-kv/data/ci/slack releasesWebhook | SLACK_RELEASES_WEBHOOK;
+            operations-kv/data/ci/github username | USERNAME ;
+            operations-kv/data/ci/github writePackagesToken | WRITE_TOKEN ;
+            operations-kv/data/ci/github zb-token | ZB_TOKEN;
+
       - name: Run Tests
         uses: zerobias-org/devops/nx-actions/content-test-fork@main
         with:

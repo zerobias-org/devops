@@ -68,6 +68,42 @@ runs:
                 - text
                 - footer
 
+    - name: Get current PR
+      if: inputs.publish-release-event == 'true' && steps.generateSlackMessage.outputs.has_packages == 'true'
+      uses: 8BitJonny/gh-get-current-pr@2.1.3
+      id: pr
+
+    - name: Configure AWS credentials
+      if: inputs.publish-release-event == 'true' && steps.generateSlackMessage.outputs.has_packages == 'true'
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        role-session-name: ${{ github.event.repository.name }}
+        aws-region: us-east-1
+
+    - name: Extract package directories
+      id: extract_dirs
+      if: inputs.publish-release-event == 'true' && steps.generateSlackMessage.outputs.has_packages == 'true'
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.packages-file }}" ] && [ -f "${{ inputs.packages-file }}" ]; then
+          # Extract locations from packages file (format: [{name, version, location}])
+          PACKAGE_DIRS=$(jq -c '[ .[] | .location ]' "${{ inputs.packages-file }}")
+          echo "PACKAGE_DIRS=$PACKAGE_DIRS" >> $GITHUB_OUTPUT
+        else
+          echo "PACKAGE_DIRS=[]" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Publish Release Event
+      if: inputs.publish-release-event == 'true' && steps.generateSlackMessage.outputs.has_packages == 'true' && steps.extract_dirs.outputs.PACKAGE_DIRS != '[]'
+      uses: zerobias-org/devops/nx-actions/publish-release-event@main
+      env:
+        PR_ID: ${{ steps.pr.outputs.number }}
+        PR_URL: ${{ steps.pr.outputs.pr_url }}
+        PR_LABELS: ${{ steps.pr.outputs.pr_labels }}
+        PACKAGE_DIRS: ${{ steps.extract_dirs.outputs.PACKAGE_DIRS }}
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+
     - name: Slack Notification on failure
       uses: slackapi/slack-github-action@v2.1.1
       if: failure() && env.SLACK_DEVOPS_NOTIFICATIONS != ''

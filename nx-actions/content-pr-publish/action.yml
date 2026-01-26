@@ -320,6 +320,7 @@ runs:
         packages-file: ${{ env.PUBLISHED_PACKAGES_FILE }}
         branch: ${{ github.ref_name }}
         dist-tag: ${{ github.ref_name }}
+        aws-role-arn: arn:aws:iam::961260934100:role/github-actions-publishing-role
 
 
     - name: Slack Notification on failure

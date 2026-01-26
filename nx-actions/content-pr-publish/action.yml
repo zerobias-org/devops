@@ -65,7 +65,8 @@ runs:
       shell: bash
       run: |
         # Detect packages with actual source changes (ignoring lock files)
-        CHANGED_DIRS=$(npx detect-changes HEAD~1)
+        # Compare against origin/main to find all changes on this branch
+        CHANGED_DIRS=$(npx detect-changes origin/main)
         if [ -z "$CHANGED_DIRS" ]; then
           echo "No packages changed, skipping build/publish"
           echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
@@ -113,7 +114,7 @@ runs:
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
         # Get changed package names
-        CHANGED_NAMES=$(npx get-changed-package-names HEAD~1)
+        CHANGED_NAMES=$(npx get-changed-package-names origin/main)
         if [ -z "$CHANGED_NAMES" ]; then
           echo "No package names found, skipping version"
           echo "HAS_VERSION_CHANGES=false" >> $GITHUB_OUTPUT

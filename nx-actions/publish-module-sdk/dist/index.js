@@ -27675,14 +27675,14 @@ function generatePackageJson(moduleDir, config) {
         scripts: {
             clean: `rm -rf generated/ dist/ docs/ ${apiFileName}`,
             'sync-meta': "VERSION=$(npm run -s get-version) NAME=$(yq -oy e .name package.json) DESC=$(yq -oy e .description package.json) yq e -i '.info.version=strenv(VERSION) | .info.title=strenv(NAME) | .info.description=strenv(DESC)' generated/api.yml",
-            validate: `npx redocly lint ${apiFileName}.yml --config .redocly.yaml || true`,
-            'generate:full': `cp ${apiFileName}.yml full.yml && if test -f connectionProfile.yml; then yq e -i '.components.schemas.ConnectionProfile.$ref'=\\"../connectionProfile.yml\\" full.yml; fi`,
+            validate: `npx redocly lint ${apiFileName} --config .redocly.yaml || true`,
+            'generate:full': `cp ${apiFileName} full.yml && if test -f connectionProfile.yml; then yq e -i '.components.schemas.ConnectionProfile.$ref'=\\"../connectionProfile.yml\\" full.yml; fi`,
             'generate:inflate': `npx redocly bundle -o full2.yml full.yml && mv full2.yml full.yml && cp full.yml ${apiFileName}`,
             'generate:api': `hub-generator generate -g hub-module -i ${apiFileName} -o generated/ --skip-validate-spec`,
             generate: 'npm run generate:full && npm run generate:inflate && npm run generate:api',
             transpile: 'tsc -b',
             build: 'npm run generate && npm run validate && npm run transpile',
-            'docs:redoc': `npx redocly build-docs ${apiFileName} -o docs/index.html`,
+            'docs:redoc': `npx redocly build-docs generated/api.yml -o docs/index.html`,
             docs: 'npm run docs:redoc',
             test: "echo 'No tests defined'",
             'get-version': 'yq -oy e .version package.json',
@@ -27748,7 +27748,7 @@ function generateRedoclyConfig(moduleDir, config) {
 
 apis:
   main:
-    root: ./${apiFileName}.yml
+    root: ./${apiFileName}
 
 extends:
   - recommended

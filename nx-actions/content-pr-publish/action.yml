@@ -108,6 +108,9 @@ runs:
       id: version
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
         # Get changed package names
         CHANGED_NAMES=$(npx get-changed-package-names HEAD~1)
@@ -139,6 +142,10 @@ runs:
     - name: publish
       if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
       shell: bash
+      env:
+        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
+        READ_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
         # Initialize published packages file as empty array
         echo "[]" > /tmp/published-packages.json
@@ -153,11 +160,12 @@ runs:
               TEMP_PUBLISH_DIR=$(mktemp -d)
               cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
               cd "$TEMP_PUBLISH_DIR"
-              # Install dependencies and create shrinkwrap (auto-included in publish)
-              npm install --ignore-scripts
+              # Install dependencies with read token (needs read:packages permission)
+              NPM_TOKEN=$READ_TOKEN npm install --ignore-scripts
               npm shrinkwrap
               echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
-              npm publish --tag rc --access public
+              # Publish with write token
+              NPM_TOKEN=$NPM_TOKEN npm publish --tag rc --access public
             ); then
               # Add successfully published package to the list
               NAME=$(jq -r '.name' "$pkg/package.json")
@@ -177,8 +185,6 @@ runs:
         echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
         echo "Captured published packages:"
         cat /tmp/published-packages.json
-      env:
-        NPM_TOKEN: ${{ env.WRITE_TOKEN }}
 
     - name: Apply dev tag
       shell: bash

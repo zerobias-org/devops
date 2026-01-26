@@ -147,7 +147,7 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       env:
-        NPM_TOKEN: ${{ inputs.publishToken }}
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
         echo `git status`
@@ -185,6 +185,7 @@ runs:
       shell: bash
       env:
         NPM_TOKEN: ${{ inputs.publishToken }}
+        READ_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
         # Create temp directory for individual publish results
@@ -203,11 +204,12 @@ runs:
               TEMP_PUBLISH_DIR=$(mktemp -d)
               cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
               cd "$TEMP_PUBLISH_DIR"
-              # Install dependencies and create shrinkwrap (auto-included in publish)
-              npm install --ignore-scripts
+              # Install dependencies with read token (needs read:packages permission)
+              NPM_TOKEN=$READ_TOKEN npm install --ignore-scripts
               npm shrinkwrap
               echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
-              npm publish --tag latest --access public
+              # Publish with write token
+              NPM_TOKEN=$NPM_TOKEN npm publish --tag latest --access public
             ); then
               # Write published package info to individual temp file
               NAME=$(jq -r ".name" "$pkg/package.json")
@@ -243,7 +245,7 @@ runs:
       if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
       shell: bash
       env:
-        NPM_TOKEN: ${{ inputs.publishToken }}
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
         # Create a tag for each published package to mark successful publish
@@ -287,6 +289,7 @@ runs:
       shell: bash
       env:
         NPM_TOKEN: ${{ inputs.publishToken }}
+        READ_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
         if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
@@ -294,8 +297,8 @@ runs:
           for pkg in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do
             NAME=$(jq -r '.name' "$pkg/package.json")
             VERSION=$(jq -r '.version' "$pkg/package.json")
-            # Check if package version exists before adding dist tags
-            if npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
+            # Check if package version exists before adding dist tags (use read token for npm view)
+            if NPM_TOKEN=$READ_TOKEN npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
               echo "Adding dist tags for $NAME@$VERSION"
               npm dist-tag add "$NAME@$VERSION" dev || echo "Warning: Failed to add dev tag"
               npm dist-tag add "$NAME@$VERSION" qa || echo "Warning: Failed to add qa tag"

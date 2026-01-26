@@ -163,11 +163,11 @@ runs:
               cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
               cd "$TEMP_PUBLISH_DIR"
               # Install dependencies with read token (needs read:packages permission)
-              timeout 120 NPM_TOKEN=$READ_TOKEN npm install --ignore-scripts
+              NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts
               npm shrinkwrap
               echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
               # Publish with write token
-              timeout 120 NPM_TOKEN=$NPM_TOKEN npm publish --tag rc --access public
+              NPM_TOKEN=$NPM_TOKEN timeout 120 npm publish --tag rc --access public
             ); then
               # Add successfully published package to the list
               NAME=$(jq -r '.name' "$pkg/package.json")

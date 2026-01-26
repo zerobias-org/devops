@@ -205,11 +205,11 @@ runs:
               cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
               cd "$TEMP_PUBLISH_DIR"
               # Install dependencies with read token (needs read:packages permission)
-              timeout 120 NPM_TOKEN=$READ_TOKEN npm install --ignore-scripts
+              NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts
               npm shrinkwrap
               echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
               # Publish with write token
-              timeout 120 NPM_TOKEN=$NPM_TOKEN npm publish --tag latest --access public
+              NPM_TOKEN=$NPM_TOKEN timeout 120 npm publish --tag latest --access public
             ); then
               # Write published package info to individual temp file
               NAME=$(jq -r ".name" "$pkg/package.json")
@@ -298,7 +298,7 @@ runs:
             NAME=$(jq -r '.name' "$pkg/package.json")
             VERSION=$(jq -r '.version' "$pkg/package.json")
             # Check if package version exists before adding dist tags (use read token for npm view)
-            if timeout 30 NPM_TOKEN=$READ_TOKEN npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
+            if NPM_TOKEN=$READ_TOKEN timeout 30 npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
               echo "Adding dist tags for $NAME@$VERSION"
               timeout 30 npm dist-tag add "$NAME@$VERSION" dev || echo "Warning: Failed to add dev tag"
               timeout 30 npm dist-tag add "$NAME@$VERSION" qa || echo "Warning: Failed to add qa tag"

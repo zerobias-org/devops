@@ -27673,16 +27673,16 @@ function generatePackageJson(moduleDir, config) {
         main: 'dist/api/index.js',
         types: 'dist/api/index.d.ts',
         scripts: {
-            clean: `rm -rf generated/ dist/ docs/ ${apiFileName}`,
+            clean: 'rm -rf generated/ dist/ docs/',
             'sync-meta': "VERSION=$(npm run -s get-version) NAME=$(yq -oy e .name package.json) DESC=$(yq -oy e .description package.json) yq e -i '.info.version=strenv(VERSION) | .info.title=strenv(NAME) | .info.description=strenv(DESC)' generated/api.yml",
-            validate: `npx redocly lint ${apiFileName} --config .redocly.yaml || true`,
-            'generate:full': `cp ${apiFileName} full.yml && if test -f connectionProfile.yml; then yq e -i '.components.schemas.ConnectionProfile.$ref'=\\"../connectionProfile.yml\\" full.yml; fi`,
-            'generate:inflate': `npx redocly bundle -o full2.yml full.yml && mv full2.yml full.yml && cp full.yml ${apiFileName}`,
-            'generate:api': `hub-generator generate -g hub-module -i ${apiFileName} -o generated/ --skip-validate-spec`,
+            validate: 'npx redocly lint generated/api.yml --config .redocly.yaml || true',
+            'generate:full': "cd generated && cp api.yml full.yml && if test -f connectionProfile.yml; then yq e -i '.components.schemas.ConnectionProfile.$ref'=\\\"./connectionProfile.yml\\\" full.yml; fi",
+            'generate:inflate': 'cd generated && npx redocly bundle -o full2.yml full.yml && mv full2.yml full.yml && cp full.yml api.yml',
+            'generate:api': 'hub-generator generate -g hub-module -i generated/api.yml -o generated/ --skip-validate-spec',
             generate: 'npm run generate:full && npm run generate:inflate && npm run generate:api',
             transpile: 'tsc -b',
             build: 'npm run generate && npm run validate && npm run transpile',
-            'docs:redoc': `npx redocly build-docs generated/api.yml -o docs/index.html`,
+            'docs:redoc': 'npx redocly build-docs generated/api.yml -o docs/index.html',
             docs: 'npm run docs:redoc',
             test: "echo 'No tests defined'",
             'get-version': 'yq -oy e .version package.json',
@@ -27697,8 +27697,8 @@ function generatePackageJson(moduleDir, config) {
             registry: 'https://npm.pkg.github.com/',
         },
         files: [
-            apiFileName,
-            'connectionProfile.yml',
+            'generated/api.yml',
+            'generated/connectionProfile.yml',
             'dist',
             'generated/api/manifest.json',
             'generated/USAGE.md',
@@ -27748,7 +27748,7 @@ function generateRedoclyConfig(moduleDir, config) {
 
 apis:
   main:
-    root: ./${apiFileName}
+    root: ./generated/api.yml
 
 extends:
   - recommended
@@ -27882,13 +27882,12 @@ async function main() {
     core.setOutput('packageName', `@${publisher}/${packageName}`);
     core.setOutput('packageVersion', version);
     core.setOutput('dir', moduleDir);
-    // Copy API spec to generated directory and module root
+    // Copy API spec to generated directory
     external_node_fs_default().copyFileSync(external_node_path_default().join(pkgDir, apiFileName), external_node_path_default().join(generatedDir, 'api.yml'));
-    external_node_fs_default().copyFileSync(external_node_path_default().join(pkgDir, apiFileName), external_node_path_default().join(moduleDir, apiFileName));
-    // Copy connectionProfile if it exists
+    // Copy connectionProfile to generated directory if it exists
     const connProfilePath = external_node_path_default().join(pkgDir, 'connectionProfile.yml');
     if (external_node_fs_default().existsSync(connProfilePath)) {
-        external_node_fs_default().copyFileSync(connProfilePath, external_node_path_default().join(moduleDir, 'connectionProfile.yml'));
+        external_node_fs_default().copyFileSync(connProfilePath, external_node_path_default().join(generatedDir, 'connectionProfile.yml'));
     }
     // Generate config files
     external_node_fs_default().writeFileSync(external_node_path_default().join(moduleDir, '.npmrc'), npmrc);

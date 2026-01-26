@@ -331,3 +331,5 @@ runs:
       uses: zerobias-org/devops/nx-actions/release-announcement@main
       with:
         packages-file: ${{ env.PUBLISHED_PACKAGES_FILE }}
+        branch: ${{ github.ref_name }}
+        dist-tag: latest

@@ -17,6 +17,14 @@ inputs:
     description: 'Path to JSON file containing published packages (optional, uses lerna list --since if not provided)'
     required: false
     default: ''
+  branch:
+    description: 'Branch name for environment context (e.g., dev, qa, main)'
+    required: false
+    default: ''
+  dist-tag:
+    description: 'NPM dist-tag applied (e.g., rc, dev, qa, latest)'
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -53,7 +61,7 @@ runs:
           attachments:
             - color: "#36a64f"
               fallback: "New Packages Published"
-              title: ":robot: New Packages Published :tada:"
+              title: ":robot: New Packages Published :tada:${{ inputs.branch && format(' ({0})', inputs.branch) || '' }}${{ inputs.dist-tag && format(' [tag: {0}]', inputs.dist-tag) || '' }}"
               text: "${{ steps.generateSlackMessage.outputs.output }}"
               footer: "<https://github.com/${{ github.repository }}|${{ github.repository }}> • <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
               mrkdwn_in:

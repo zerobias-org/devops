@@ -1,5 +1,5 @@
-import { LoggerEngine } from '@zerobias-org/logger'
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
+import { LoggerEngine } from '@zerobias-org/logger';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'child_process';

@@ -85,15 +85,16 @@ function extractPackageInfoFromPackageName(pkg: string, rawApiName: string): Pac
   if (splitPackage[0]?.startsWith('@')) {
     publisher = splitPackage[0].replace(/@/, '');
   }
-  let packageName = `${rawApiName.replace(/-/g, '')}-sdk`;
+  // Use hub-sdk suffix to distinguish from api-client SDK
+  let packageName = `${rawApiName.replace(/-/g, '')}-hub-sdk`;
   let apiFileName = `${rawApiName}.yml`;
   if (splitPackage[1]?.startsWith('module-')) {
     if (splitPackage[1].includes('@')) {
       apiFileName = `${splitPackage[1].split('@')[0]}.yml`;
-      packageName = `${splitPackage[1].split('@')[0]}-sdk`;
+      packageName = `${splitPackage[1].split('@')[0]}-hub-sdk`;
     } else {
       apiFileName = `${splitPackage[1]}.yml`;
-      packageName = `${splitPackage[1]}-sdk`;
+      packageName = `${splitPackage[1]}-hub-sdk`;
     }
   }
 
@@ -106,12 +107,12 @@ function extractPackageInfoFromPackageName(pkg: string, rawApiName: string): Pac
 
 function extractMetadataFromPackageJson(pkgJson: Record<string, unknown>, config: Config): ModuleMetadata {
   const moduleInfo = (pkgJson.zerobias || pkgJson.auditmation) as Record<string, string> | undefined;
-  let zbPackageName = `zerobias.${config.rawApiName.replace(/-/g, '')}.sdk`;
+  let zbPackageName = `zerobias.${config.rawApiName.replace(/-/g, '')}.hub.sdk`;
   let moduleRepository: string | undefined = undefined;
   let moduleId = config.moduleId;
 
   if (moduleInfo) {
-    zbPackageName = moduleInfo.package?.replace('.module', '.sdk') || zbPackageName;
+    zbPackageName = moduleInfo.package?.replace('.module', '.hub.sdk') || zbPackageName;
     moduleRepository = (pkgJson.repository as Record<string, string>)?.url;
     if (!moduleId && pkgJson.moduleId) {
       moduleId = pkgJson.moduleId as string;
@@ -132,7 +133,7 @@ function generatePackageJson(moduleDir: string, config: PackageJsonConfig): void
   const pkgJson = {
     name: `@${publisher}/${packageName}`,
     version,
-    description: `${packageName} SDK`,
+    description: `${packageName} Hub SDK (with Hub routing support)`,
     moduleId,
     type: 'module',
     main: 'dist/api/index.js',
@@ -143,7 +144,7 @@ function generatePackageJson(moduleDir: string, config: PackageJsonConfig): void
       validate: 'npx redocly lint generated/api.yml --config .redocly.yaml || true',
       'generate:full': "cd generated && cp api.yml full.yml && if test -f connectionProfile.yml; then yq e -i '.components.schemas.ConnectionProfile.$ref'=\\\"./connectionProfile.yml\\\" full.yml; fi",
       'generate:inflate': 'cd generated && npx redocly bundle -o full2.yml full.yml && mv full2.yml full.yml && cp full.yml api.yml',
-      'generate:api': 'hub-generator generate -g api-client -i generated/api.yml -o generated/ --skip-validate-spec',
+      'generate:api': 'hub-generator generate -g hub-module -i generated/api.yml -o generated/ --skip-validate-spec',
       'generate:fix': 'bash fix-gen-code.sh',
       generate: 'npm run generate:full && npm run generate:inflate && npm run generate:api && npm run generate:fix',
       transpile: 'tsc -b',
@@ -174,10 +175,10 @@ function generatePackageJson(moduleDir: string, config: PackageJsonConfig): void
     zerobias: {
       package: zbPackageName,
       'dataloader-version': '1.0.0',
-      'import-artifact': 'sdk',
+      'import-artifact': 'hub-sdk',
     },
     dependencies: {
-      '@zerobias-org/util-api-client-base': '^1.0.10',
+      '@zerobias-org/util-connector': '^1.0.0',
     },
     devDependencies: {
       '@redocly/cli': '^2.14.5',
@@ -254,6 +255,54 @@ function addYamlExtensions(ymlPath: string, apiName: string): void {
   info['x-impl-name'] = capitalize(apiName);
 
   fs.writeFileSync(ymlPath, yaml.dump(yml, { lineWidth: -1 }));
+}
+
+function addHubFactoryFunction(generatedDir: string, apiName: string): void {
+  const indexPath = path.join(generatedDir, 'api', 'index.ts');
+  const implClassName = `${capitalize(apiName)}HubImpl`;
+  const connectorType = `${capitalize(apiName)}HubConnector`;
+  const factoryFnName = `new${capitalize(apiName)}Hub`;
+
+  const factoryCode = `
+/**
+ * ${capitalize(apiName)} Hub Connector type
+ * Combines the API interface with Hub connection management
+ */
+export type ${connectorType} = ${capitalize(apiName)} & HubCoreHubConnector;
+
+/**
+ * Create a new ${capitalize(apiName)} Hub client instance
+ *
+ * @example
+ * \`\`\`typescript
+ * import { ${factoryFnName} } from 'sdk';
+ *
+ * const client = ${factoryFnName}();
+ * await client.connect({
+ *   hubUrl: 'https://hub.example.com',
+ *   targetId: 'target-uuid',
+ *   apiKey: 'your-api-key',
+ *   orgId: 'org-uuid'
+ * });
+ *
+ * const result = await client.getSomeApi().someMethod();
+ *
+ * await client.disconnect();
+ * \`\`\`
+ */
+export function ${factoryFnName}(): ${implClassName} {
+  return new ${implClassName}();
+}
+
+// Re-export model types for convenience
+export * from '../model/index.js';
+
+// Re-export HubConnectionProfile for consumers
+export { HubConnectionProfile } from '@zerobias-org/types-core-js';
+`;
+
+  const content = fs.readFileSync(indexPath, 'utf-8');
+  fs.writeFileSync(indexPath, content + factoryCode);
 }
 
 function generateRedoclyConfig(moduleDir: string, config: PackageJsonConfig): void {
@@ -378,7 +427,7 @@ async function main(): Promise<void> {
     },
   };
 
-  console.info(`Creating SDK client for ${pkg}`);
+  console.info(`Creating Hub Module SDK client for ${pkg}`);
 
   // Extract source module to get API spec
   const apiDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zerobias-'));
@@ -396,10 +445,10 @@ async function main(): Promise<void> {
   console.info(`Found version ${pkgJson.version}`);
 
   const { zbPackageName, moduleId, moduleRepository, version } = extractMetadataFromPackageJson(pkgJson, config);
-  console.info(`Generating SDK client for ${pkg} with ${apiFileName}`);
+  console.info(`Generating Hub Module SDK client for ${pkg} with ${apiFileName}`);
 
   // Build SDK structure
-  const moduleDir = fs.mkdtempSync(path.join(os.tmpdir(), `${publisher}-sdk-`));
+  const moduleDir = fs.mkdtempSync(path.join(os.tmpdir(), `${publisher}-hub-sdk-`));
   const generatedDir = path.join(moduleDir, 'generated');
   fs.mkdirSync(generatedDir);
 
@@ -418,7 +467,7 @@ async function main(): Promise<void> {
     fs.copyFileSync(connProfilePath, path.join(generatedDir, 'connectionProfile.yml'));
   }
 
-  // Add x-impl-name and x-product-infos YAML extensions to API spec
+  // Add x-impl-name YAML extension to API spec
   addYamlExtensions(path.join(generatedDir, 'api.yml'), config.apiName);
 
   // Generate config files
@@ -438,8 +487,18 @@ async function main(): Promise<void> {
   console.info('Running npm run sync-meta');
   await exec.exec('npm', ['run', 'sync-meta'], execOptions);
 
-  console.info('Running npm run build');
-  await exec.exec('npm', ['run', 'build'], execOptions);
+  console.info('Running npm run generate');
+  await exec.exec('npm', ['run', 'generate'], execOptions);
+
+  // Add factory function after code generation
+  console.info('Adding Hub factory function');
+  addHubFactoryFunction(generatedDir, config.apiName);
+
+  console.info('Running npm run validate');
+  await exec.exec('npm', ['run', 'validate'], execOptions);
+
+  console.info('Running npm run transpile');
+  await exec.exec('npm', ['run', 'transpile'], execOptions);
 
   console.info('Running npm run docs');
   await exec.exec('npm', ['run', 'docs'], execOptions);

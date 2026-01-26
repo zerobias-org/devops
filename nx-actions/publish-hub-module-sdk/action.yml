@@ -1,0 +1,34 @@
+name: 'Hub Module Sdk Publish Action'
+description: 'Publishes a Hub Module SDK with Hub routing support (HubConnector pattern)'
+inputs:
+  package:
+    description: The package which contains the API
+    required: true
+  apiName:
+    description: The path at which the API can be found (e.g. `hub`)
+    required: true
+  apiPath:
+    description: The path for API calls. (e.g. `api/v1`).
+    required: true
+  moduleId:
+    description: The id of the generated module.
+    required: false
+  publishToken:
+    description: Token with permissions to publish packages
+    required: true
+outputs:
+  dir:
+    description: The directory with the module
+  packageId:
+    description: The package name and version
+  packageName:
+    description: The package name
+  packageVersion:
+    description: The package version
+  published:
+    description: Whether the package was published (true/false)
+  skipped:
+    description: Whether the publish was skipped because version already exists (true/false)
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

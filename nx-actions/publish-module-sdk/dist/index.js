@@ -27675,10 +27675,10 @@ function generatePackageJson(moduleDir, config) {
         scripts: {
             clean: `rm -rf generated/ dist/ docs/ ${apiFileName}`,
             'sync-meta': "VERSION=$(npm run -s get-version) NAME=$(yq -oy e .name package.json) DESC=$(yq -oy e .description package.json) yq e -i '.info.version=strenv(VERSION) | .info.title=strenv(NAME) | .info.description=strenv(DESC)' generated/api.yml",
-            validate: 'npx redocly lint generated/api.yml --config .redocly.yaml || true',
-            'generate:full': `cp generated/api.yml generated/full.yml && if test -f connectionProfile.yml; then yq e -i '.components.schemas.ConnectionProfile.$ref'=\\"../connectionProfile.yml\\" generated/full.yml; fi`,
-            'generate:inflate': `npx redocly bundle -o generated/full2.yml generated/full.yml && mv generated/full2.yml generated/full.yml && cp generated/full.yml ${apiFileName}`,
-            'generate:api': 'hub-generator generate -g api-client -i generated/full.yml -o generated/ --skip-validate-spec',
+            validate: `npx redocly lint ${apiFileName}.yml --config .redocly.yaml || true`,
+            'generate:full': `cp ${apiFileName}.yml full.yml && if test -f connectionProfile.yml; then yq e -i '.components.schemas.ConnectionProfile.$ref'=\\"../connectionProfile.yml\\" full.yml; fi`,
+            'generate:inflate': `npx redocly bundle -o full2.yml full.yml && mv full2.yml full.yml && cp full.yml ${apiFileName}`,
+            'generate:api': `hub-generator generate -g hub-module -i ${apiFileName} -o generated/ --skip-validate-spec`,
             generate: 'npm run generate:full && npm run generate:inflate && npm run generate:api',
             transpile: 'tsc -b',
             build: 'npm run generate && npm run validate && npm run transpile',
@@ -27740,14 +27740,15 @@ function generateTsConfig(moduleDir) {
     };
     external_node_fs_default().writeFileSync(external_node_path_default().join(moduleDir, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2));
 }
-function generateRedoclyConfig(moduleDir) {
-    const config = `
+function generateRedoclyConfig(moduleDir, config) {
+    const { apiFileName } = config;
+    const redoclyConfig = `
 # Redocly configuration for OpenAPI validation
 # Migrated from Spectral
 
 apis:
   main:
-    root: ./api.yml
+    root: ./${apiFileName}.yml
 
 extends:
   - recommended
@@ -27840,7 +27841,7 @@ rules:
   #   message: Enum values must be snake_case.
 
 `;
-    external_node_fs_default().writeFileSync(external_node_path_default().join(moduleDir, '.redocly.yaml'), config);
+    external_node_fs_default().writeFileSync(external_node_path_default().join(moduleDir, '.redocly.yaml'), redoclyConfig);
 }
 async function main() {
     const config = initConfig();
@@ -27892,7 +27893,7 @@ async function main() {
     external_node_fs_default().writeFileSync(external_node_path_default().join(moduleDir, '.npmrc'), npmrc);
     generatePackageJson(moduleDir, { packageName, publisher, version, moduleId, zbPackageName, apiFileName, moduleRepository });
     generateTsConfig(moduleDir);
-    generateRedoclyConfig(moduleDir);
+    generateRedoclyConfig(moduleDir, { packageName, publisher, version, moduleId, zbPackageName, apiFileName, moduleRepository });
     console.info(`Directory listing for ${moduleDir}: ${external_node_fs_default().readdirSync(moduleDir)}`);
     // Install, build, and publish
     execOptions.cwd = moduleDir;

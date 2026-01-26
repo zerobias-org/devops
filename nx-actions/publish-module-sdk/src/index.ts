@@ -204,14 +204,15 @@ function generateTsConfig(moduleDir: string): void {
   fs.writeFileSync(path.join(moduleDir, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2));
 }
 
-function generateRedoclyConfig(moduleDir: string): void {
-  const config = `
+function generateRedoclyConfig(moduleDir: string, config: PackageJsonConfig): void {
+  const { apiFileName } = config;
+  const redoclyConfig = `
 # Redocly configuration for OpenAPI validation
 # Migrated from Spectral
 
 apis:
   main:
-    root: ./api.yml
+    root: ./${apiFileName}.yml
 
 extends:
   - recommended
@@ -304,7 +305,7 @@ rules:
   #   message: Enum values must be snake_case.
 
 `;
-  fs.writeFileSync(path.join(moduleDir, '.redocly.yaml'), config);
+  fs.writeFileSync(path.join(moduleDir, '.redocly.yaml'), redoclyConfig);
 }
 
 async function main(): Promise<void> {
@@ -369,7 +370,7 @@ async function main(): Promise<void> {
   fs.writeFileSync(path.join(moduleDir, '.npmrc'), npmrc);
   generatePackageJson(moduleDir, { packageName, publisher, version, moduleId, zbPackageName, apiFileName, moduleRepository });
   generateTsConfig(moduleDir);
-  generateRedoclyConfig(moduleDir);
+  generateRedoclyConfig(moduleDir, { packageName, publisher, version, moduleId, zbPackageName, apiFileName, moduleRepository });
 
   console.info(`Directory listing for ${moduleDir}: ${fs.readdirSync(moduleDir)}`);
 

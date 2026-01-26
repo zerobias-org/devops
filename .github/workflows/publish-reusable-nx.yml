@@ -8,8 +8,13 @@ on:
         type: string
         required: false
         default: 'false'
-      dispatch-client-publish:
-        description: 'Dispatch client-publish event after successful publish'
+      dispatch-sdk-publish:
+        description: 'Dispatch sdk-publish event after successful publish'
+        type: boolean
+        required: false
+        default: false
+      dispatch-hub-sdk-publish:
+        description: 'Dispatch hub-sdk-publish event after successful publish'
         type: boolean
         required: false
         default: false
@@ -94,8 +99,8 @@ jobs:
         with:
           publishToken: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Dispatch client-publish event
-        if: ${{ inputs.dispatch-client-publish && steps.publish.outputs.has_version_changes == 'true' }}
+      - name: Dispatch sdk-publish event
+        if: ${{ inputs.dispatch-sdk-publish && steps.publish.outputs.has_version_changes == 'true' }}
         run: |
           PACKAGES='${{ steps.publish.outputs.published_packages }}'
           if [ -z "$PACKAGES" ] || [ "$PACKAGES" = "[]" ]; then
@@ -103,11 +108,11 @@ jobs:
             exit 0
           fi
 
-          # Transform packages to client-publish format
+          # Transform packages to sdk-publish format
           # Input: [{"name": "@scope/pkg", "version": "1.0.0", "location": "/path"}]
           # Output: [{"name": "@scope/pkg@1.0.0", "version": "1.0.0", "apiName": "pkg", "apiPath": "pkg"}]
           PAYLOAD=$(echo "$PACKAGES" | jq -c '{
-            "event_type": "client-publish",
+            "event_type": "sdk-publish",
             "client_payload": {
               "packages": [.[] | {
                 "name": (.name + "@" + .version),
@@ -118,7 +123,42 @@ jobs:
             }
           }')
 
-          echo "Dispatching client-publish event to ${{ github.repository }}"
+          echo "Dispatching sdk-publish event to ${{ github.repository }}"
+          echo "Payload: $PAYLOAD"
+
+          curl -X POST \
+            --fail \
+            -H "Authorization: token ${{ env.DISPATCH_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-type: application/json" \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d "$PAYLOAD"
+
+      - name: Dispatch hub-sdk-publish event
+        if: ${{ inputs.dispatch-hub-sdk-publish && steps.publish.outputs.has_version_changes == 'true' }}
+        run: |
+          PACKAGES='${{ steps.publish.outputs.published_packages }}'
+          if [ -z "$PACKAGES" ] || [ "$PACKAGES" = "[]" ]; then
+            echo "No packages to dispatch"
+            exit 0
+          fi
+
+          # Transform packages to hub-sdk-publish format
+          # Input: [{"name": "@scope/pkg", "version": "1.0.0", "location": "/path"}]
+          # Output: [{"name": "@scope/pkg@1.0.0", "version": "1.0.0", "apiName": "pkg", "apiPath": "pkg"}]
+          PAYLOAD=$(echo "$PACKAGES" | jq -c '{
+            "event_type": "hub-sdk-publish",
+            "client_payload": {
+              "packages": [.[] | {
+                "name": (.name + "@" + .version),
+                "version": .version,
+                "apiName": (.name | split("-") | .[-1]),
+                "apiPath": (.name | split("-") | .[-1])
+              }]
+            }
+          }')
+
+          echo "Dispatching hub-sdk-publish event to ${{ github.repository }}"
           echo "Payload: $PAYLOAD"
 
           curl -X POST \

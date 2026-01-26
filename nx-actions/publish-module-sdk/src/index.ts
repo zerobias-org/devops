@@ -357,8 +357,9 @@ async function main(): Promise<void> {
   core.setOutput('packageVersion', version);
   core.setOutput('dir', moduleDir);
 
-  // Copy API spec to generated directory
+  // Copy API spec to generated directory and module root
   fs.copyFileSync(path.join(pkgDir, apiFileName), path.join(generatedDir, 'api.yml'));
+  fs.copyFileSync(path.join(pkgDir, apiFileName), path.join(moduleDir, apiFileName));
 
   // Copy connectionProfile if it exists
   const connProfilePath = path.join(pkgDir, 'connectionProfile.yml');

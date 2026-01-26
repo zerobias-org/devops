@@ -27882,8 +27882,9 @@ async function main() {
     core.setOutput('packageName', `@${publisher}/${packageName}`);
     core.setOutput('packageVersion', version);
     core.setOutput('dir', moduleDir);
-    // Copy API spec to generated directory
+    // Copy API spec to generated directory and module root
     external_node_fs_default().copyFileSync(external_node_path_default().join(pkgDir, apiFileName), external_node_path_default().join(generatedDir, 'api.yml'));
+    external_node_fs_default().copyFileSync(external_node_path_default().join(pkgDir, apiFileName), external_node_path_default().join(moduleDir, apiFileName));
     // Copy connectionProfile if it exists
     const connProfilePath = external_node_path_default().join(pkgDir, 'connectionProfile.yml');
     if (external_node_fs_default().existsSync(connProfilePath)) {

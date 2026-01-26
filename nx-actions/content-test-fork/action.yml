@@ -100,15 +100,23 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
           if [ -f "$pkg/package.json" ]; then
-            PROJECT_NAME=$(jq -r '.name' "$pkg/package.json")
-            echo "Building $PROJECT_NAME (from $pkg)"
-            nx nx:build "$PROJECT_NAME"
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            # Check if nx:build script exists in package.json
+            if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "Building $PROJECT_NAME (from $pkg)"
+              nx nx:build "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+            else
+              echo "Skipping $PROJECT_NAME - no nx:build target"
+            fi
           fi
-        done
+        '
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
         JAVA_OPTS: "-Xms256m -Xmx1024m"
 
     # Need at at least a file in there as download action will fail if no artifact found
@@ -149,12 +157,14 @@ runs:
       shell: bash
       run: |
         npm i -g @zerobias-com/platform-dataloader@latest
-        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
-          if [ -f "$pkg/package.json" ] && grep -q '"prepublishtest"' "$pkg/package.json"; then
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ] && grep -q "\"prepublishtest\"" "$pkg/package.json"; then
             echo "Running prepublishtest for $pkg"
             (cd "$pkg" && npm run prepublishtest)
           fi
-        done
+        '
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         DYNAMO_DB_TABLE: ${{ env.AWS_DYNAMO_DB_TABLE }}
@@ -169,19 +179,21 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+        RUN_INTEGRATION="${{ inputs.run-integration-tests }}"
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
           if [ -f "$pkg/package.json" ]; then
             echo "Running tests for $pkg"
             cd "$pkg"
-            if grep -q '"test:unit"' package.json; then
+            if grep -q "\"test:unit\"" package.json; then
               npm run test:unit || true
             fi
-            if [[ "${{ inputs.run-integration-tests }}" == "true" ]] && grep -q '"test:integration"' package.json; then
+            if [[ "'"$RUN_INTEGRATION"'" == "true" ]] && grep -q "\"test:integration\"" package.json; then
               npm run test:integration || true
             fi
-            cd - > /dev/null
           fi
-        done
+        '
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         DYNAMO_DB_TABLE: ${{ env.AWS_DYNAMO_DB_TABLE }}

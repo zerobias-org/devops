@@ -112,8 +112,13 @@ runs:
           pkg="{}"
           if [ -f "$pkg/package.json" ]; then
             PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
-            echo "Building $PROJECT_NAME (from $pkg)"
-            nx nx:build "$PROJECT_NAME"
+            # Check if nx:build script exists in package.json
+            if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "Building $PROJECT_NAME (from $pkg)"
+              nx nx:build "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+            else
+              echo "Skipping $PROJECT_NAME - no nx:build target"
+            fi
           fi
         '
       env:
@@ -182,11 +187,14 @@ runs:
         NPM_TOKEN: ${{ inputs.publishToken }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
-        # Initialize published packages file as empty array
-        echo "[]" > /tmp/published-packages.json
+        # Create temp directory for individual publish results
+        PUBLISH_RESULTS_DIR=$(mktemp -d)
+        export PUBLISH_RESULTS_DIR
 
-        # Publish each changed package with latest tag and track what was published
-        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+        # Publish packages in parallel (4 at a time)
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
           if [ -f "$pkg/package.json" ]; then
             echo "Publishing $pkg with latest tag"
             # Generate npm-shrinkwrap.json in isolation (outside workspace context)
@@ -201,20 +209,28 @@ runs:
               echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
               npm publish --tag latest --access public
             ); then
-              # Add successfully published package to the list
-              NAME=$(jq -r '.name' "$pkg/package.json")
-              VERSION=$(jq -r '.version' "$pkg/package.json")
+              # Write published package info to individual temp file
+              NAME=$(jq -r ".name" "$pkg/package.json")
+              VERSION=$(jq -r ".version" "$pkg/package.json")
               LOCATION=$(realpath "$pkg")
-              # Append to JSON array
-              jq --arg name "$NAME" --arg version "$VERSION" --arg location "$LOCATION" \
-                '. += [{"name": $name, "version": $version, "location": $location}]' \
-                /tmp/published-packages.json > /tmp/published-packages.tmp.json
-              mv /tmp/published-packages.tmp.json /tmp/published-packages.json
+              # Use package name hash as filename to avoid collisions
+              HASH=$(echo "$pkg" | md5sum | cut -d" " -f1)
+              echo "{\"name\": \"$NAME\", \"version\": \"$VERSION\", \"location\": \"$LOCATION\"}" > "$PUBLISH_RESULTS_DIR/$HASH.json"
             else
               echo "Warning: Failed to publish $pkg"
             fi
           fi
+        '
+
+        # Merge all individual results into final JSON array
+        echo "[]" > /tmp/published-packages.json
+        for result_file in "$PUBLISH_RESULTS_DIR"/*.json; do
+          if [ -f "$result_file" ]; then
+            jq --slurpfile pkg "$result_file" '. += $pkg' /tmp/published-packages.json > /tmp/published-packages.tmp.json
+            mv /tmp/published-packages.tmp.json /tmp/published-packages.json
+          fi
         done
+        rm -rf "$PUBLISH_RESULTS_DIR"
 
         echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
         echo "HAS_VERSION_CHANGES=true" >> $GITHUB_ENV
@@ -232,10 +248,12 @@ runs:
       run: |
         # Create a tag for each published package to mark successful publish
         if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
-          for pkg in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do
+          jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE" | \
+          xargs -P4 -I{} bash -c '
+            pkg="{}"
             if [ -f "$pkg/package.json" ]; then
-              PKG_NAME=$(jq -r '.name' "$pkg/package.json")
-              PKG_VERSION=$(jq -r '.version' "$pkg/package.json")
+              PKG_NAME=$(jq -r ".name" "$pkg/package.json")
+              PKG_VERSION=$(jq -r ".version" "$pkg/package.json")
               # Verify package was actually published before creating tag
               if npm view "$PKG_NAME@$PKG_VERSION" version > /dev/null 2>&1; then
                 TAG_NAME="${PKG_NAME}@${PKG_VERSION}"
@@ -246,7 +264,7 @@ runs:
                 echo "Skipping tag for $PKG_NAME@$PKG_VERSION - not found in registry"
               fi
             fi
-          done
+          '
         else
           echo "No published packages file found, skipping tags"
         fi

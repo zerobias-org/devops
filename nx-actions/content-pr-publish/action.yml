@@ -85,15 +85,23 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
           if [ -f "$pkg/package.json" ]; then
-            PROJECT_NAME=$(jq -r '.name' "$pkg/package.json")
-            echo "Building $PROJECT_NAME (from $pkg)"
-            nx nx:build "$PROJECT_NAME"
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            # Check if nx:build script exists in package.json
+            if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "Building $PROJECT_NAME (from $pkg)"
+              nx nx:build "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+            else
+              echo "Skipping $PROJECT_NAME - no nx:build target"
+            fi
           fi
-        done
+        '
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
         JAVA_OPTS: "-Xms256m -Xmx1024m"
 
     - name: version

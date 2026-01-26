@@ -34,7 +34,7 @@ runs:
           operations-kv/data/ci/github username | USERNAME ;
           operations-kv/data/ci/github readPackagesToken | READ_TOKEN;
           operations-kv/data/ci/slack releasesWebhook | SLACK_RELEASES_WEBHOOK ;
-          operations-kv/data/ci/github docsDeploymentToken | DISPATCH_TOKEN;
+          operations-kv/data/ci/github dispatchToken | DISPATCH_TOKEN;
           operations-kv/data/ci/github zb-token | ZB_TOKEN;
 
     - name: configure aws tools creds

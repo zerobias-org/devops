@@ -115,7 +115,7 @@ runs:
             # Check if nx:build script exists in package.json
             if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
               echo "Building $PROJECT_NAME (from $pkg)"
-              nx nx:build "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+              timeout 300 nx nx:build "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
             else
               echo "Skipping $PROJECT_NAME - no nx:build target"
             fi
@@ -205,11 +205,11 @@ runs:
               cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
               cd "$TEMP_PUBLISH_DIR"
               # Install dependencies with read token (needs read:packages permission)
-              NPM_TOKEN=$READ_TOKEN npm install --ignore-scripts
+              timeout 120 NPM_TOKEN=$READ_TOKEN npm install --ignore-scripts
               npm shrinkwrap
               echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
               # Publish with write token
-              NPM_TOKEN=$NPM_TOKEN npm publish --tag latest --access public
+              timeout 120 NPM_TOKEN=$NPM_TOKEN npm publish --tag latest --access public
             ); then
               # Write published package info to individual temp file
               NAME=$(jq -r ".name" "$pkg/package.json")
@@ -257,11 +257,11 @@ runs:
               PKG_NAME=$(jq -r ".name" "$pkg/package.json")
               PKG_VERSION=$(jq -r ".version" "$pkg/package.json")
               # Verify package was actually published before creating tag
-              if npm view "$PKG_NAME@$PKG_VERSION" version > /dev/null 2>&1; then
+              if timeout 30 npm view "$PKG_NAME@$PKG_VERSION" version > /dev/null 2>&1; then
                 TAG_NAME="${PKG_NAME}@${PKG_VERSION}"
                 echo "Creating tag: $TAG_NAME"
                 git tag -f "$TAG_NAME" -m "Published $PKG_NAME version $PKG_VERSION"
-                git push origin "$TAG_NAME" --force || echo "Warning: Failed to push tag $TAG_NAME"
+                timeout 60 git push origin "$TAG_NAME" --force || echo "Warning: Failed to push tag $TAG_NAME"
               else
                 echo "Skipping tag for $PKG_NAME@$PKG_VERSION - not found in registry"
               fi
@@ -298,12 +298,12 @@ runs:
             NAME=$(jq -r '.name' "$pkg/package.json")
             VERSION=$(jq -r '.version' "$pkg/package.json")
             # Check if package version exists before adding dist tags (use read token for npm view)
-            if NPM_TOKEN=$READ_TOKEN npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
+            if timeout 30 NPM_TOKEN=$READ_TOKEN npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
               echo "Adding dist tags for $NAME@$VERSION"
-              npm dist-tag add "$NAME@$VERSION" dev || echo "Warning: Failed to add dev tag"
-              npm dist-tag add "$NAME@$VERSION" qa || echo "Warning: Failed to add qa tag"
-              npm dist-tag add "$NAME@$VERSION" uat || echo "Warning: Failed to add uat tag"
-              npm dist-tag add "$NAME@$VERSION" rc || echo "Warning: Failed to add rc tag"
+              timeout 30 npm dist-tag add "$NAME@$VERSION" dev || echo "Warning: Failed to add dev tag"
+              timeout 30 npm dist-tag add "$NAME@$VERSION" qa || echo "Warning: Failed to add qa tag"
+              timeout 30 npm dist-tag add "$NAME@$VERSION" uat || echo "Warning: Failed to add uat tag"
+              timeout 30 npm dist-tag add "$NAME@$VERSION" rc || echo "Warning: Failed to add rc tag"
             else
               echo "Skipping dist tags for $NAME@$VERSION - package not found in registry"
             fi

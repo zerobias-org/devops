@@ -89,7 +89,7 @@ runs:
             # Check if nx:build script exists in package.json
             if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
               echo "Building $PROJECT_NAME (from $pkg)"
-              nx nx:build "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+              timeout 300 nx nx:build "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
             else
               echo "Skipping $PROJECT_NAME - no nx:build target"
             fi
@@ -144,7 +144,7 @@ runs:
           pkg="{}"
           if [ -f "$pkg/package.json" ] && grep -q "\"prepublishtest\"" "$pkg/package.json"; then
             echo "Running prepublishtest for $pkg"
-            (cd "$pkg" && npm run prepublishtest)
+            (cd "$pkg" && timeout 300 npm run prepublishtest)
           fi
         '
       env:

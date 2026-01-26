@@ -93,7 +93,7 @@ runs:
             # Check if nx:build script exists in package.json
             if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
               echo "Building $PROJECT_NAME (from $pkg)"
-              nx nx:build "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+              timeout 300 nx nx:build "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
             else
               echo "Skipping $PROJECT_NAME - no nx:build target"
             fi
@@ -161,11 +161,11 @@ runs:
               cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
               cd "$TEMP_PUBLISH_DIR"
               # Install dependencies with read token (needs read:packages permission)
-              NPM_TOKEN=$READ_TOKEN npm install --ignore-scripts
+              timeout 120 NPM_TOKEN=$READ_TOKEN npm install --ignore-scripts
               npm shrinkwrap
               echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
               # Publish with write token
-              NPM_TOKEN=$NPM_TOKEN npm publish --tag rc --access public
+              timeout 120 NPM_TOKEN=$NPM_TOKEN npm publish --tag rc --access public
             ); then
               # Add successfully published package to the list
               NAME=$(jq -r '.name' "$pkg/package.json")
@@ -197,7 +197,7 @@ runs:
             NAME=$(jq -r '.name' "$pkg/package.json")
             VERSION=$(jq -r '.version' "$pkg/package.json")
             echo "Applying dev tag to $NAME@$VERSION"
-            npm dist-tag add "$NAME@$VERSION" dev || echo "Warning: Failed to add dev tag"
+            timeout 30 npm dist-tag add "$NAME@$VERSION" dev || echo "Warning: Failed to add dev tag"
           done
         else
           echo "No published packages file found, skipping dev tag"
@@ -214,7 +214,7 @@ runs:
             NAME=$(jq -r '.name' "$pkg/package.json")
             VERSION=$(jq -r '.version' "$pkg/package.json")
             echo "Removing dev tag from $NAME@$VERSION"
-            npm dist-tag rm "$NAME@$VERSION" dev || echo 'dev tag not present'
+            timeout 30 npm dist-tag rm "$NAME@$VERSION" dev || echo 'dev tag not present'
           done
         else
           echo "No published packages file found, skipping dev tag removal"
@@ -232,7 +232,7 @@ runs:
             NAME=$(jq -r '.name' "$pkg/package.json")
             VERSION=$(jq -r '.version' "$pkg/package.json")
             echo "Applying qa tag to $NAME@$VERSION"
-            npm dist-tag add "$NAME@$VERSION" qa || echo "Warning: Failed to add qa tag"
+            timeout 30 npm dist-tag add "$NAME@$VERSION" qa || echo "Warning: Failed to add qa tag"
           done
         else
           echo "No published packages file found, skipping qa tag"
@@ -249,7 +249,7 @@ runs:
             NAME=$(jq -r '.name' "$pkg/package.json")
             VERSION=$(jq -r '.version' "$pkg/package.json")
             echo "Removing qa tag from $NAME@$VERSION"
-            npm dist-tag rm "$NAME@$VERSION" qa || echo 'qa tag not present'
+            timeout 30 npm dist-tag rm "$NAME@$VERSION" qa || echo 'qa tag not present'
           done
         else
           echo "No published packages file found, skipping qa tag removal"
@@ -266,7 +266,7 @@ runs:
             NAME=$(jq -r '.name' "$pkg/package.json")
             VERSION=$(jq -r '.version' "$pkg/package.json")
             echo "Applying skip-dataloader tag to $NAME@$VERSION"
-            npm dist-tag add "$NAME@$VERSION" skip-dataloader || echo "Warning: Failed to add skip-dataloader tag"
+            timeout 30 npm dist-tag add "$NAME@$VERSION" skip-dataloader || echo "Warning: Failed to add skip-dataloader tag"
           done
         else
           echo "No published packages file found, skipping skip-dataloader tag"
@@ -283,7 +283,7 @@ runs:
             NAME=$(jq -r '.name' "$pkg/package.json")
             VERSION=$(jq -r '.version' "$pkg/package.json")
             echo "Removing skip-dataloader tag from $NAME@$VERSION"
-            npm dist-tag rm "$NAME@$VERSION" skip-dataloader || echo 'skip-dataloader tag not present'
+            timeout 30 npm dist-tag rm "$NAME@$VERSION" skip-dataloader || echo 'skip-dataloader tag not present'
           done
         else
           echo "No published packages file found, skipping skip-dataloader tag removal"

@@ -53,5 +53,6 @@ echo "Dependencies changed, publishing bundle update"
 cd bundle
 npm version patch
 npm i
+npm shrinkwrap
 NPM_TOKEN=$PUBLISH_TOKEN npm publish
 cd ..

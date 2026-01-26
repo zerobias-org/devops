@@ -127,7 +127,8 @@ runs:
         FORCE_PUBLISH=$(echo "$CHANGED_NAMES" | tr '\n' ',' | sed 's/,$//')
 
         # Version with prerelease (rc) - separate from publish to avoid lerna publish bug
-        npx lerna version --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --conventional-commits --conventional-prerelease --preid rc --yes
+        # Allow current branch for pre-release versioning (overrides lerna.json allowBranch restriction)
+        npx lerna version --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --conventional-commits --conventional-prerelease --preid rc --allow-branch "${{ github.ref_name }}" --yes
 
         echo "HAS_VERSION_CHANGES=true" >> $GITHUB_OUTPUT
 

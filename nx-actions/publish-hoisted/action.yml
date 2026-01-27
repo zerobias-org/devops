@@ -189,6 +189,12 @@ runs:
               LOCATION=$(realpath "$OLDPWD/$pkg")
               HASH=$(echo "$pkg" | md5sum | cut -d" " -f1)
               echo "{\"name\": \"$NAME\", \"version\": \"$VERSION\", \"location\": \"$LOCATION\"}" > "$PUBLISH_RESULTS_DIR/$HASH.json"
+
+              # Create tag immediately after successful publish to avoid inconsistent state
+              TAG_NAME="${NAME}@${VERSION}"
+              echo "Creating tag: $TAG_NAME"
+              git tag -f "$TAG_NAME" -m "Published $NAME version $VERSION"
+              timeout 60 git push origin "$TAG_NAME" --force || echo "Warning: Failed to push tag $TAG_NAME"
             else
               echo "::error::Failed to publish $pkg"
               echo "$pkg" >> "$FAIL_FILE"
@@ -222,36 +228,6 @@ runs:
         rm -f "$FAIL_FILE"
 
         echo "packages published"
-
-    - name: Create and push publish tags
-      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
-      shell: bash
-      env:
-        NPM_TOKEN: ${{ env.READ_TOKEN }}
-        ZB_TOKEN: ${{ env.ZB_TOKEN }}
-      run: |
-        # Create a tag for each published package to mark successful publish
-        if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
-          jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE" | \
-          xargs -P4 -I{} bash -c '
-            pkg="{}"
-            if [ -f "$pkg/package.json" ]; then
-              PKG_NAME=$(jq -r ".name" "$pkg/package.json")
-              PKG_VERSION=$(jq -r ".version" "$pkg/package.json")
-              # Verify package was actually published before creating tag
-              if timeout 30 npm view "$PKG_NAME@$PKG_VERSION" version > /dev/null 2>&1; then
-                TAG_NAME="${PKG_NAME}@${PKG_VERSION}"
-                echo "Creating tag: $TAG_NAME"
-                git tag -f "$TAG_NAME" -m "Published $PKG_NAME version $PKG_VERSION"
-                timeout 60 git push origin "$TAG_NAME" --force || echo "Warning: Failed to push tag $TAG_NAME"
-              else
-                echo "Skipping tag for $PKG_NAME@$PKG_VERSION - not found in registry"
-              fi
-            fi
-          '
-        else
-          echo "No published packages file found, skipping tags"
-        fi
 
     - name: Set action outputs
       id: set_outputs

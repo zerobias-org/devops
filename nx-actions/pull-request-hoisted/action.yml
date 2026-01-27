@@ -68,6 +68,7 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
+        FAIL_FILE=$(mktemp)
         echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
         xargs -P4 -I{} bash -c '
           pkg="{}"
@@ -76,12 +77,21 @@ runs:
             # Check if nx:build script exists in package.json
             if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
               echo "Building $PROJECT_NAME (from $pkg)"
-              timeout 300 nx nx:build "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+              if ! timeout 300 nx nx:build "$PROJECT_NAME"; then
+                echo "::error::Build failed for $PROJECT_NAME"
+                echo "$PROJECT_NAME" >> '"$FAIL_FILE"'
+              fi
             else
               echo "Skipping $PROJECT_NAME - no nx:build target"
             fi
           fi
         '
+        if [ -s "$FAIL_FILE" ]; then
+          echo "::error::Build failed for: $(cat $FAIL_FILE | tr '\n' ', ')"
+          rm -f "$FAIL_FILE"
+          exit 1
+        fi
+        rm -f "$FAIL_FILE"
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
@@ -91,6 +101,7 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
+        FAIL_FILE=$(mktemp)
         echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
         xargs -P4 -I{} bash -c '
           pkg="{}"
@@ -98,21 +109,33 @@ runs:
             PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
             # Check if test:unit script exists in package.json
             if jq -e ".scripts[\"test:unit\"]" "$pkg/package.json" > /dev/null 2>&1; then
-              echo "Building $PROJECT_NAME (from $pkg)"
-              timeout 300 nx test:unit "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+              echo "Testing $PROJECT_NAME (unit tests)"
+              if ! timeout 300 nx test:unit "$PROJECT_NAME"; then
+                echo "::error::Unit tests failed for $PROJECT_NAME"
+                echo "$PROJECT_NAME:unit" >> '"$FAIL_FILE"'
+              fi
             else
               echo "Skipping $PROJECT_NAME - no test:unit target"
             fi
-            
+
             # Check if test:integration script exists in package.json
             if jq -e ".scripts[\"test:integration\"]" "$pkg/package.json" > /dev/null 2>&1; then
-              echo "Building $PROJECT_NAME (from $pkg)"
-              timeout 300 nx test:integration "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+              echo "Testing $PROJECT_NAME (integration tests)"
+              if ! timeout 300 nx test:integration "$PROJECT_NAME"; then
+                echo "::error::Integration tests failed for $PROJECT_NAME"
+                echo "$PROJECT_NAME:integration" >> '"$FAIL_FILE"'
+              fi
             else
               echo "Skipping $PROJECT_NAME - no test:integration target"
             fi
           fi
         '
+        if [ -s "$FAIL_FILE" ]; then
+          echo "::error::Tests failed for: $(cat $FAIL_FILE | tr '\n' ', ')"
+          rm -f "$FAIL_FILE"
+          exit 1
+        fi
+        rm -f "$FAIL_FILE"
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}

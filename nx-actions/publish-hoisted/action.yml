@@ -198,6 +198,7 @@ runs:
         # Create temp directory for individual publish results
         PUBLISH_RESULTS_DIR=$(mktemp -d)
         FAIL_FILE=$(mktemp)
+        REPO_ROOT=$(pwd)
         export PUBLISH_RESULTS_DIR
         export FAIL_FILE
         export PUBLISH_TOKEN
@@ -226,10 +227,11 @@ runs:
               echo "{\"name\": \"$NAME\", \"version\": \"$VERSION\", \"location\": \"$LOCATION\"}" > "$PUBLISH_RESULTS_DIR/$HASH.json"
 
               # Create tag immediately after successful publish to avoid inconsistent state
+              # Use git -C to run in repo root since we're in temp publish dir
               TAG_NAME="${NAME}@${VERSION}"
               echo "Creating tag: $TAG_NAME"
-              git tag -f "$TAG_NAME" -m "Published $NAME version $VERSION"
-              timeout 60 git push origin "$TAG_NAME" --force || echo "Warning: Failed to push tag $TAG_NAME"
+              git -C "$REPO_ROOT" tag -f "$TAG_NAME" -m "Published $NAME version $VERSION"
+              timeout 60 git -C "$REPO_ROOT" push origin "$TAG_NAME" --force || echo "Warning: Failed to push tag $TAG_NAME"
             else
               echo "::error::Failed to publish $pkg"
               echo "$pkg" >> "$FAIL_FILE"

@@ -151,14 +151,38 @@ runs:
         push: true
 
     - name: Save package.json state before prepublish
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      shell: bash
       run: |
         echo "Saving package.json files before prepublish modifications..."
         mkdir -p /tmp/package-json-backup
-        find . -name "package.json" -not -path "*/node_modules/*" -exec cp --parents {} /tmp/package-json-backup/ \;
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+          if [ -f "$pkg/package.json" ]; then
+            mkdir -p "/tmp/package-json-backup/$pkg"
+            cp "$pkg/package.json" "/tmp/package-json-backup/$pkg/package.json"
+            echo "Backed up $pkg/package.json"
+          fi
+        done
 
     - name: Prepare standalone packages
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      shell: bash
       run: |
-        nx affected -t nx:prepublish --base=${{ steps.base_ref.outputs.BASE_REF }}
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+          if [ -f "$pkg/package.json" ]; then
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            # Check if nx:prepublish script exists in package.json
+            if jq -e ".scripts[\"nx:prepublish\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "Preparing $PROJECT_NAME (from $pkg) for standalone publish"
+              if ! timeout 120 nx nx:prepublish "$PROJECT_NAME"; then
+                echo "::error::Prepublish failed for $PROJECT_NAME"
+                exit 1
+              fi
+            else
+              echo "Skipping $PROJECT_NAME - no nx:prepublish target"
+            fi
+          fi
+        done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
@@ -241,9 +265,16 @@ runs:
         echo "packages published"
 
     - name: Restore package.json state after publish
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      shell: bash
       run: |
         echo "Restoring package.json files to pre-prepublish state..."
-        cp -r /tmp/package-json-backup/./* .
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+          if [ -f "/tmp/package-json-backup/$pkg/package.json" ]; then
+            cp "/tmp/package-json-backup/$pkg/package.json" "$pkg/package.json"
+            echo "Restored $pkg/package.json"
+          fi
+        done
 
     - name: Set action outputs
       id: set_outputs

@@ -214,7 +214,15 @@ runs:
             # Copy .npmrc for registry auth
             cp "$HOME/.npmrc" .npmrc 2>/dev/null || true
             # Install dependencies with read token (needs read:packages permission)
-            NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts
+            echo "Installing dependencies for $(jq -r .name package.json)..."
+            if ! NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts 2>&1; then
+              echo "::error::npm install failed for $pkg"
+              cat ~/.npm/_logs/*.log 2>/dev/null | tail -50 || true
+              echo "$pkg" >> "$FAIL_FILE"
+              popd > /dev/null
+              rm -rf "$TEMP_PUBLISH_DIR"
+              continue
+            fi
             npm shrinkwrap
             echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
             # Publish with write token

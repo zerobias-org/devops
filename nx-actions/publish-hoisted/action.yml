@@ -71,11 +71,15 @@ runs:
           echo "No packages changed, skipping build/publish"
           echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
         else
-          echo "Changed packages:"
+          echo "Changed packages (unsorted):"
           echo "$CHANGED_DIRS"
           # Convert newlines to spaces for safe use in for loops
           CHANGED_DIRS_INLINE=$(echo "$CHANGED_DIRS" | tr '\n' ' ')
-          echo "CHANGED_DIRS=$CHANGED_DIRS_INLINE" >> $GITHUB_OUTPUT
+          # Sort by dependency order for correct build/publish sequence
+          SORTED_DIRS=$(npx sort-by-deps $CHANGED_DIRS_INLINE)
+          echo "Sorted by dependencies:"
+          echo "$SORTED_DIRS"
+          echo "CHANGED_DIRS=$SORTED_DIRS" >> $GITHUB_OUTPUT
           echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
           echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
         fi
@@ -162,12 +166,8 @@ runs:
         export PUBLISH_TOKEN
         export READ_TOKEN
 
-        # Sort packages by dependency order (packages with no internal deps first)
-        SORTED_DIRS=$(npx sort-by-deps ${{ steps.detect_changes.outputs.CHANGED_DIRS }})
-        echo "Publish order: $SORTED_DIRS"
-
-        # Publish packages in dependency order
-        for pkg in $SORTED_DIRS; do
+        # Publish packages in dependency order (already sorted by detect_changes step)
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
             echo "Publishing $pkg with latest tag"
             TEMP_PUBLISH_DIR=$(mktemp -d)

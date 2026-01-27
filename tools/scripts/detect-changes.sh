@@ -63,6 +63,15 @@ get_workspace_dirs() {
   fi
 }
 
+# Get list of workspace package names (for filtering out internal deps)
+get_workspace_package_names() {
+  for pkg_dir in $(get_workspace_dirs); do
+    if [ -f "$pkg_dir/package.json" ]; then
+      jq -r '.name // empty' "$pkg_dir/package.json" 2>/dev/null
+    fi
+  done
+}
+
 # Find all workspace packages that depend on the given package names
 # Usage: find_dependents "pkg-name-1 pkg-name-2 ..."
 # Output: List of package directories that depend on any of the input packages
@@ -164,6 +173,9 @@ if [ "$HOISTED_MODE" = true ]; then
   if [ -n "$LOCK_CHANGED" ] || [ -n "$ROOT_PKG_CHANGED" ]; then
     CHANGED_DEPS=""
 
+    # Get internal package names to filter them out (we only care about external dep changes)
+    INTERNAL_PKGS=$(get_workspace_package_names | tr '\n' '|' | sed 's/|$//')
+
     if [ -n "$LOCK_CHANGED" ]; then
       if [ "$UNCOMMITTED_MODE" = true ]; then
         CHANGED_DEPS=$(git diff HEAD -- package-lock.json 2>/dev/null | \
@@ -199,6 +211,11 @@ if [ "$HOISTED_MODE" = true ]; then
           sort -u || true)
       fi
       CHANGED_DEPS=$(printf "%s\n%s" "$CHANGED_DEPS" "$PKG_DEPS" | sort -u)
+    fi
+
+    # Filter out internal workspace package names - their changes are handled by SOURCE_CHANGED_PKGS
+    if [ -n "$INTERNAL_PKGS" ] && [ -n "$CHANGED_DEPS" ]; then
+      CHANGED_DEPS=$(echo "$CHANGED_DEPS" | grep -v -E "^($INTERNAL_PKGS)$" || true)
     fi
 
     # For each workspace, check if it uses any of the changed deps

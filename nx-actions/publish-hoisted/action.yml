@@ -1,0 +1,273 @@
+name: 'Publish Hoisted'
+description: 'Runs to publish a zerobias-org or zerobias-com hoisted mono repo'
+
+outputs:
+  has_version_changes:
+    description: 'Whether any packages were versioned and published'
+    value: ${{ steps.set_outputs.outputs.has_version_changes }}
+  published_packages:
+    description: 'JSON array of published packages with name, version, location'
+    value: ${{ steps.set_outputs.outputs.published_packages }}
+  changed_dirs:
+    description: 'Space-separated list of changed package directories'
+    value: ${{ steps.detect_changes.outputs.CHANGED_DIRS }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Restore git cache
+      uses: actions/cache@v4
+      with:
+        path: .git
+        key: ${{ github.repository }}-git-folder
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: zerobias-org/devops/nx-actions/setup-node@main
+
+    - name: configure git user
+      shell: bash
+      run: |
+        git config --global user.email "ci@neverfail.com"
+        git config --global user.name "@$GITHUB_ACTOR"
+
+    - name: Install nx
+      shell: bash
+      run: |
+        npm install -g nx@20.5.0
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cp .npmrc $HOME/.npmrc
+        npm ci
+        npm install -g @zerobias-org/devops-tools@latest
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Detect changed packages
+      id: detect_changes
+      shell: bash
+      run: |
+        # Get last published tag
+        LAST_PUBLISH_TAG=$(git describe --tags --abbrev=0 --match="*" 2>/dev/null || echo "HEAD~1")
+        echo "Using base ref: $LAST_PUBLISH_TAG"
+
+        # Detect packages with actual source changes (ignoring lock files)
+        CHANGED_DIRS=$(npx detect-changes "$LAST_PUBLISH_TAG")
+        if [ -z "$CHANGED_DIRS" ]; then
+          echo "No packages changed, skipping build/publish"
+          echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
+        else
+          echo "Changed packages:"
+          echo "$CHANGED_DIRS"
+          # Convert newlines to spaces for safe use in for loops
+          CHANGED_DIRS_INLINE=$(echo "$CHANGED_DIRS" | tr '\n' ' ')
+          echo "CHANGED_DIRS=$CHANGED_DIRS_INLINE" >> $GITHUB_OUTPUT
+          echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
+          echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: CDN Update
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      uses: zerobias-org/devops/nx-actions/cdn-update@main
+      with:
+        update-all: ${{ inputs.update-all }}
+        changed-dirs: ${{ steps.detect_changes.outputs.CHANGED_DIRS }}
+
+    - name: Build changed packages
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ]; then
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            # Check if nx:build script exists in package.json
+            if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "Building $PROJECT_NAME (from $pkg)"
+              timeout 300 nx nx:build "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+            else
+              echo "Skipping $PROJECT_NAME - no nx:build target"
+            fi
+          fi
+        '
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+        JAVA_OPTS: "-Xms256m -Xmx1024m"
+
+    - name: version
+      id: version
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+      run: |
+        echo `git status`
+
+        # Get changed package names for filtered lerna operations
+        CHANGED_NAMES=$(npx get-changed-package-names "${{ steps.detect_changes.outputs.BASE_REF }}")
+        if [ -z "$CHANGED_NAMES" ]; then
+          echo "No package names found, skipping version"
+          echo "HAS_VERSION_CHANGES=false" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        echo "Versioning packages:"
+        echo "$CHANGED_NAMES"
+
+        # Build comma-separated list for lerna --force-publish
+        FORCE_PUBLISH=$(echo "$CHANGED_NAMES" | tr '\n' ',' | sed 's/,$//')
+        echo "Force publish list: $FORCE_PUBLISH"
+
+        # Version with graduate - separate from publish to avoid lerna publish bug
+        npx lerna version --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
+
+        echo "HAS_VERSION_CHANGES=true" >> $GITHUB_OUTPUT
+
+    - name: Commit version changes
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      uses: EndBug/add-and-commit@v9
+      with:
+        add: '.'
+        message: 'chore(release): bump version'
+        default_author: github_actions
+        push: true
+
+    - name: publish
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.publishToken }}
+        READ_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+      run: |
+        # Create temp directory for individual publish results
+        PUBLISH_RESULTS_DIR=$(mktemp -d)
+        export PUBLISH_RESULTS_DIR
+
+        # Publish packages in parallel (4 at a time)
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ]; then
+            echo "Publishing $pkg with latest tag"
+            # Generate npm-shrinkwrap.json in isolation (outside workspace context)
+            # Copy package to temp dir, install deps, create shrinkwrap, then publish
+            if (
+              TEMP_PUBLISH_DIR=$(mktemp -d)
+              cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
+              cd "$TEMP_PUBLISH_DIR"
+              # Install dependencies with read token (needs read:packages permission)
+              NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts
+              npm shrinkwrap
+              echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
+              # Publish with write token
+              NPM_TOKEN=$NPM_TOKEN timeout 120 npm publish --tag latest --access public
+            ); then
+              # Write published package info to individual temp file
+              NAME=$(jq -r ".name" "$pkg/package.json")
+              VERSION=$(jq -r ".version" "$pkg/package.json")
+              LOCATION=$(realpath "$pkg")
+              # Use package name hash as filename to avoid collisions
+              HASH=$(echo "$pkg" | md5sum | cut -d" " -f1)
+              echo "{\"name\": \"$NAME\", \"version\": \"$VERSION\", \"location\": \"$LOCATION\"}" > "$PUBLISH_RESULTS_DIR/$HASH.json"
+            else
+              echo "Warning: Failed to publish $pkg"
+            fi
+          fi
+        '
+
+        # Merge all individual results into final JSON array
+        echo "[]" > /tmp/published-packages.json
+        for result_file in "$PUBLISH_RESULTS_DIR"/*.json; do
+          if [ -f "$result_file" ]; then
+            jq --slurpfile pkg "$result_file" '. += $pkg' /tmp/published-packages.json > /tmp/published-packages.tmp.json
+            mv /tmp/published-packages.tmp.json /tmp/published-packages.json
+          fi
+        done
+        rm -rf "$PUBLISH_RESULTS_DIR"
+
+        echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
+        echo "HAS_VERSION_CHANGES=true" >> $GITHUB_ENV
+        echo "Captured published packages:"
+        cat /tmp/published-packages.json
+
+        echo "packages published"
+
+    - name: Create and push publish tags
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+      run: |
+        # Create a tag for each published package to mark successful publish
+        if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
+          jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE" | \
+          xargs -P4 -I{} bash -c '
+            pkg="{}"
+            if [ -f "$pkg/package.json" ]; then
+              PKG_NAME=$(jq -r ".name" "$pkg/package.json")
+              PKG_VERSION=$(jq -r ".version" "$pkg/package.json")
+              # Verify package was actually published before creating tag
+              if timeout 30 npm view "$PKG_NAME@$PKG_VERSION" version > /dev/null 2>&1; then
+                TAG_NAME="${PKG_NAME}@${PKG_VERSION}"
+                echo "Creating tag: $TAG_NAME"
+                git tag -f "$TAG_NAME" -m "Published $PKG_NAME version $PKG_VERSION"
+                timeout 60 git push origin "$TAG_NAME" --force || echo "Warning: Failed to push tag $TAG_NAME"
+              else
+                echo "Skipping tag for $PKG_NAME@$PKG_VERSION - not found in registry"
+              fi
+            fi
+          '
+        else
+          echo "No published packages file found, skipping tags"
+        fi
+
+    - name: Set action outputs
+      id: set_outputs
+      shell: bash
+      run: |
+        echo "has_version_changes=${{ steps.version.outputs.HAS_VERSION_CHANGES || 'false' }}" >> $GITHUB_OUTPUT
+        if [ -n "${{ env.PUBLISHED_PACKAGES_FILE }}" ] && [ -f "${{ env.PUBLISHED_PACKAGES_FILE }}" ]; then
+          # Read packages file and output as single-line JSON
+          PACKAGES=$(cat "${{ env.PUBLISHED_PACKAGES_FILE }}" | jq -c '.')
+          echo "published_packages=$PACKAGES" >> $GITHUB_OUTPUT
+        else
+          echo "published_packages=[]" >> $GITHUB_OUTPUT
+        fi
+
+    - name: post publish
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.publishToken }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+        READ_TOKEN: ${{ env.READ_TOKEN }}
+        PUBLISHED_PACKAGES_FILE: ${{ env.PUBLISHED_PACKAGES_FILE }}
+      run: |
+        if [ -x scripts/postpublish.sh ]; then
+          scripts/postpublish.sh
+        fi
+
+    - name: Release Announcement
+      if: ${{ inputs.skip-publish-announcement != 'true' && steps.version.outputs.HAS_VERSION_CHANGES == 'true' }}
+      uses: zerobias-org/devops/nx-actions/release-announcement@main
+      with:
+        packages-file: ${{ env.PUBLISHED_PACKAGES_FILE }}
+        branch: ${{ github.ref_name }}
+        dist-tag: latest
+        aws-role-arn: arn:aws:iam::961260934100:role/github-actions-publishing-role

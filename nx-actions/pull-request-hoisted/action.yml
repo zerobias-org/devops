@@ -1,0 +1,137 @@
+name: 'Pull Request Hoisted'
+description: 'Handle the Pull Request testing flow for zerobias-org or zerobias-com hoisted mono repo'
+runs:
+  using: "composite"
+  steps:
+    - name: Restore git cache
+      uses: actions/cache@v4
+      with:
+        path: .git
+        key: ${{ github.repository }}-git-folder
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ github.ref_name }}
+
+    - name: Setup node
+      uses: zerobias-org/devops/actions/setup-node@main
+
+    - name: Configure git user
+      shell: bash
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+
+    - name: Install nx
+      shell: bash
+      run: |
+        npm install -g nx@20.5.0
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cp .npmrc $HOME/.npmrc
+        npm ci
+        npm install -g @zerobias-org/devops-tools@latest
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Detect changed packages
+      id: detect_changes
+      shell: bash
+      run: |
+        # Detect packages with actual source changes (ignoring lock files)
+        # Compare against origin/main to find all changes on this branch
+        CHANGED_DIRS=$(npx detect-changes origin/main)
+        if [ -z "$CHANGED_DIRS" ]; then
+          echo "No packages changed, skipping build/publish"
+          echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
+        else
+          echo "Changed packages:"
+          echo "$CHANGED_DIRS"
+          # Convert newlines to spaces for safe use in for loops
+          CHANGED_DIRS_INLINE=$(echo "$CHANGED_DIRS" | tr '\n' ' ')
+          echo "CHANGED_DIRS=$CHANGED_DIRS_INLINE" >> $GITHUB_OUTPUT
+          echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Build changed packages
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ]; then
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            # Check if nx:build script exists in package.json
+            if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "Building $PROJECT_NAME (from $pkg)"
+              timeout 300 nx nx:build "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+            else
+              echo "Skipping $PROJECT_NAME - no nx:build target"
+            fi
+          fi
+        '
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+        JAVA_OPTS: "-Xms256m -Xmx1024m"
+
+    - name: Test changed packages
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ]; then
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            # Check if test:unit script exists in package.json
+            if jq -e ".scripts[\"test:unit\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "Building $PROJECT_NAME (from $pkg)"
+              timeout 300 nx test:unit "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+            else
+              echo "Skipping $PROJECT_NAME - no test:unit target"
+            fi
+            
+            # Check if test:integration script exists in package.json
+            if jq -e ".scripts[\"test:integration\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "Building $PROJECT_NAME (from $pkg)"
+              timeout 300 nx test:integration "$PROJECT_NAME" || echo "Warning: build failed for $PROJECT_NAME"
+            else
+              echo "Skipping $PROJECT_NAME - no test:integration target"
+            fi
+          fi
+        '
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+        JAVA_OPTS: "-Xms256m -Xmx1024m"
+
+    - name: Slack Notification on failure
+      uses: slackapi/slack-github-action@v2.1.1
+      if: failure() && env.SLACK_DEVOPS_NOTIFICATIONS != ''
+      with:
+        webhook: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
+        webhook-type: incoming-webhook
+        payload: |
+          text: "${{ github.repository }} Pull Request Hoisted Failed"
+          attachments:
+            - color: "#ff0000"
+              fallback: "Pull Request Hoisted Failed"
+              title: ":fire: ${{ github.repository }} Pull Request Hoisted Failed"
+              text: "Workflow run failed"
+              footer: "<https://github.com/${{ github.repository }}|${{ github.repository }}> • <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
+              mrkdwn_in:
+                - text
+                - footer

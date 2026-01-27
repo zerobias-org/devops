@@ -24,6 +24,17 @@ runs:
         git config user.name github-actions
         git config user.email github-actions@github.com
 
+    - name: Import Secrets
+      uses: hashicorp/vault-action@v2.4.3
+      with:
+        method: jwt
+        url: ${{ secrets.VAULT_ADDR }}
+        role: publishing-role
+        path: gh-actions
+        secrets: |
+          operations-kv/data/ci/github platformUrl | PLATFORM_URL;
+          operations-kv/data/ci/github platformApiKey | PLATFORM_API_KEY;
+
     - name: Install nx
       shell: bash
       run: |

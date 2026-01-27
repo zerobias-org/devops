@@ -156,7 +156,7 @@ runs:
       if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
       shell: bash
       env:
-        PUBLISH_TOKEN: ${{ inputs.publishToken  }}
+        PUBLISH_TOKEN: ${{ inputs.publishToken }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
@@ -186,8 +186,8 @@ runs:
               NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts
               npm shrinkwrap
               echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
-              # Publish with write token
-              NPM_TOKEN=$PUBLISH_TOKEN timeout 120 npm publish --tag latest --access public
+              # Publish with write token (no --access flag, GitHub Packages uses repo visibility)
+              NPM_TOKEN=$PUBLISH_TOKEN timeout 120 npm publish --tag latest
             ); then
               # Write published package info to individual temp file
               NAME=$(jq -r ".name" "$pkg/package.json")

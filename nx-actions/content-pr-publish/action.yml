@@ -167,7 +167,7 @@ runs:
               npm shrinkwrap
               echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
               # Publish with write token
-              NPM_TOKEN=$NPM_TOKEN timeout 120 npm publish --tag rc --access public
+              NPM_TOKEN=$NPM_TOKEN timeout 120 npm publish --tag rc
             ); then
               # Add successfully published package to the list
               NAME=$(jq -r '.name' "$pkg/package.json")

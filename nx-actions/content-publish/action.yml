@@ -209,7 +209,7 @@ runs:
               npm shrinkwrap
               echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
               # Publish with write token
-              NPM_TOKEN=$NPM_TOKEN timeout 120 npm publish --tag latest --access public
+              NPM_TOKEN=$NPM_TOKEN timeout 120 npm publish --tag latest
             ); then
               # Write published package info to individual temp file
               NAME=$(jq -r ".name" "$pkg/package.json")

@@ -82,10 +82,8 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        FAIL_FILE=$(mktemp)
-        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
-        xargs -P4 -I{} bash -c '
-          pkg="{}"
+        # Build sequentially - nx handles its own parallelism and dependency ordering
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
             PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
             # Check if nx:build script exists in package.json
@@ -93,19 +91,13 @@ runs:
               echo "Building $PROJECT_NAME (from $pkg)"
               if ! timeout 300 nx nx:build "$PROJECT_NAME"; then
                 echo "::error::Build failed for $PROJECT_NAME"
-                echo "$PROJECT_NAME" >> '"$FAIL_FILE"'
+                exit 1
               fi
             else
               echo "Skipping $PROJECT_NAME - no nx:build target"
             fi
           fi
-        '
-        if [ -s "$FAIL_FILE" ]; then
-          echo "::error::Build failed for: $(cat $FAIL_FILE | tr '\n' ', ')"
-          rm -f "$FAIL_FILE"
-          exit 1
-        fi
-        rm -f "$FAIL_FILE"
+        done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}

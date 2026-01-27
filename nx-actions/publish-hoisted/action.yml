@@ -207,33 +207,61 @@ runs:
         # Publish packages in dependency order (already sorted by detect_changes step)
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
-            echo "Publishing $pkg with latest tag"
-            TEMP_PUBLISH_DIR=$(mktemp -d)
-            cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
-            pushd "$TEMP_PUBLISH_DIR" > /dev/null
-            # Copy .npmrc for registry auth
-            cp "$HOME/.npmrc" .npmrc 2>/dev/null || true
-            # Publish with write token
-            if NPM_TOKEN=$PUBLISH_TOKEN timeout 120 npm publish --tag latest; then
-              # Write published package info
-              NAME=$(jq -r ".name" package.json)
-              VERSION=$(jq -r ".version" package.json)
-              LOCATION=$(realpath "$OLDPWD/$pkg")
-              HASH=$(echo "$pkg" | md5sum | cut -d" " -f1)
-              echo "{\"name\": \"$NAME\", \"version\": \"$VERSION\", \"location\": \"$LOCATION\"}" > "$PUBLISH_RESULTS_DIR/$HASH.json"
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            PROJECT_VERSION=$(jq -r ".version" "$pkg/package.json")
 
-              # Create tag immediately after successful publish to avoid inconsistent state
-              # Use git -C to run in repo root since we're in temp publish dir
-              TAG_NAME="${NAME}@${VERSION}"
-              echo "Creating tag: $TAG_NAME"
-              git -C "$REPO_ROOT" tag -f "$TAG_NAME" -m "Published $NAME version $VERSION"
-              timeout 60 git -C "$REPO_ROOT" push origin "$TAG_NAME" --force || echo "Warning: Failed to push tag $TAG_NAME"
+            # Check if package has custom nx:publish script
+            if jq -e ".scripts[\"nx:publish\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "Publishing $PROJECT_NAME using custom nx:publish script"
+              pushd "$pkg" > /dev/null
+              # Copy .npmrc for registry auth
+              cp "$HOME/.npmrc" .npmrc 2>/dev/null || true
+              # Run custom publish script with write token
+              if NPM_TOKEN=$PUBLISH_TOKEN timeout 120 nx nx:publish "$PROJECT_NAME"; then
+                # Write published package info
+                HASH=$(echo "$pkg" | md5sum | cut -d" " -f1)
+                echo "{\"name\": \"$PROJECT_NAME\", \"version\": \"$PROJECT_VERSION\", \"location\": \"$(realpath .)\"}" > "$PUBLISH_RESULTS_DIR/$HASH.json"
+
+                # Create tag
+                TAG_NAME="${PROJECT_NAME}@${PROJECT_VERSION}"
+                echo "Creating tag: $TAG_NAME"
+                git -C "$REPO_ROOT" tag -f "$TAG_NAME" -m "Published $PROJECT_NAME version $PROJECT_VERSION"
+                timeout 60 git -C "$REPO_ROOT" push origin "$TAG_NAME" --force || echo "Warning: Failed to push tag $TAG_NAME"
+              else
+                echo "::error::Failed to publish $pkg"
+                echo "$pkg" >> "$FAIL_FILE"
+              fi
+              popd > /dev/null
             else
-              echo "::error::Failed to publish $pkg"
-              echo "$pkg" >> "$FAIL_FILE"
+              # Default publish behavior - copy to temp dir and run npm publish
+              echo "Publishing $pkg with latest tag"
+              TEMP_PUBLISH_DIR=$(mktemp -d)
+              cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
+              pushd "$TEMP_PUBLISH_DIR" > /dev/null
+              # Copy .npmrc for registry auth
+              cp "$HOME/.npmrc" .npmrc 2>/dev/null || true
+              # Publish with write token
+              if NPM_TOKEN=$PUBLISH_TOKEN timeout 120 npm publish --tag latest; then
+                # Write published package info
+                NAME=$(jq -r ".name" package.json)
+                VERSION=$(jq -r ".version" package.json)
+                LOCATION=$(realpath "$OLDPWD/$pkg")
+                HASH=$(echo "$pkg" | md5sum | cut -d" " -f1)
+                echo "{\"name\": \"$NAME\", \"version\": \"$VERSION\", \"location\": \"$LOCATION\"}" > "$PUBLISH_RESULTS_DIR/$HASH.json"
+
+                # Create tag immediately after successful publish to avoid inconsistent state
+                # Use git -C to run in repo root since we're in temp publish dir
+                TAG_NAME="${NAME}@${VERSION}"
+                echo "Creating tag: $TAG_NAME"
+                git -C "$REPO_ROOT" tag -f "$TAG_NAME" -m "Published $NAME version $VERSION"
+                timeout 60 git -C "$REPO_ROOT" push origin "$TAG_NAME" --force || echo "Warning: Failed to push tag $TAG_NAME"
+              else
+                echo "::error::Failed to publish $pkg"
+                echo "$pkg" >> "$FAIL_FILE"
+              fi
+              popd > /dev/null
+              rm -rf "$TEMP_PUBLISH_DIR"
             fi
-            popd > /dev/null
-            rm -rf "$TEMP_PUBLISH_DIR"
           fi
         done
 

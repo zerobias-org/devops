@@ -8,7 +8,12 @@ set -e
 #
 # Usage: prepublish-standalone.sh [ROOT_DIR] [OPTIONS]
 #   ROOT_DIR  - Path to the monorepo root (defaults to finding package.json with workspaces)
-#   OPTIONS   - Passed through to prepublish-standalone.js (--dry-run, --restore, --library)
+#   OPTIONS   - Passed through to prepublish-standalone.js:
+#     --dry-run     Show what would be done without making changes
+#     --restore     Restore the original package.json from backup
+#     --library     Skip build tool dependencies (for SDK/library packages)
+#     --target-dir  Write updated package.json to this directory instead of service dir
+#                   (useful for ng-packagr where dist/ has its own package.json)
 #
 # Note: Shrinkwrap generation is skipped due to chicken-and-egg issue with
 # workspace packages not being published yet. Docker builds will generate

@@ -7,11 +7,14 @@
  * 3. Adding only required dependencies (build, runtime, scripts) from root package.json
  * 4. Preserving the original package.json (backs it up first)
  *
- * Usage: node prepublish-standalone-v2.js <service-dir> <root-dir> [--dry-run] [--restore]
+ * Usage: node prepublish-standalone.js <service-dir> <root-dir> [--dry-run] [--restore] [--library] [--target-dir=<dir>]
  *
  * Options:
- *   --dry-run   Show what would be done without making changes
- *   --restore   Restore the original package.json from backup
+ *   --dry-run         Show what would be done without making changes
+ *   --restore         Restore the original package.json from backup
+ *   --library         Skip build tool dependencies (for SDK/library packages)
+ *   --target-dir=DIR  Write updated package.json to this directory instead of service dir
+ *                     (useful for ng-packagr where dist/ has its own package.json)
  */
 
 import fs from 'node:fs';
@@ -21,15 +24,18 @@ const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const restore = args.includes('--restore');
 const libraryMode = args.includes('--library'); // Skip build tool deps for library packages
+const targetDirArg = args.find(arg => arg.startsWith('--target-dir='));
+const targetDir = targetDirArg ? targetDirArg.split('=')[1] : null;
 const serviceDir = args.find(arg => !arg.startsWith('--'));
 const rootDir = args.find((arg, i) => !arg.startsWith('--') && i > args.indexOf(serviceDir));
 
 if (!serviceDir || !rootDir) {
-  console.error('Usage: node prepublish-standalone.js <service-dir> <root-dir> [--dry-run] [--restore] [--library]');
+  console.error('Usage: node prepublish-standalone.js <service-dir> <root-dir> [--dry-run] [--restore] [--library] [--target-dir=<dir>]');
   console.error('\nOptions:');
-  console.error('  --dry-run   Show what would be done without making changes');
-  console.error('  --restore   Restore the original package.json from backup');
-  console.error('  --library   Skip build tool dependencies (for SDK/library packages)');
+  console.error('  --dry-run         Show what would be done without making changes');
+  console.error('  --restore         Restore the original package.json from backup');
+  console.error('  --library         Skip build tool dependencies (for SDK/library packages)');
+  console.error('  --target-dir=DIR  Write updated package.json to DIR instead of service dir');
   process.exit(1);
 }
 
@@ -642,10 +648,14 @@ function getWorkspaceTransitiveDeps(packageName, workspacePackageJsons, visited 
  */
 function main() {
   const servicePackageJsonPath = path.join(serviceDir, 'package.json');
+  // If targetDir is specified, write to that directory's package.json instead
+  const outputPackageJsonPath = targetDir
+    ? path.join(targetDir, 'package.json')
+    : servicePackageJsonPath;
 
   // Handle restore mode
   if (restore) {
-    restoreBackup(servicePackageJsonPath);
+    restoreBackup(outputPackageJsonPath);
     return;
   }
 
@@ -673,8 +683,18 @@ function main() {
     }
   }
 
-  // Read service package.json
+  // Read service package.json (source for scanning)
   const servicePackageJson = JSON.parse(fs.readFileSync(servicePackageJsonPath, 'utf8'));
+
+  // Read target package.json if using --target-dir (e.g., ng-packagr's dist/package.json)
+  // This preserves the target's structure (exports, typings, etc.) while adding dependencies
+  let outputPackageJson;
+  if (targetDir && fs.existsSync(outputPackageJsonPath)) {
+    outputPackageJson = JSON.parse(fs.readFileSync(outputPackageJsonPath, 'utf8'));
+    console.log(`Using target package.json: ${outputPackageJsonPath}`);
+  } else {
+    outputPackageJson = { ...servicePackageJson };
+  }
 
   // Auto-detect library mode based on zerobias.import-artifact field
   // SDK packages should not include build tool dependencies
@@ -685,6 +705,7 @@ function main() {
   console.log(`\n=== Preparing standalone package: ${servicePackageJson.name} ===`);
   console.log(`Service directory: ${serviceDir}`);
   console.log(`Root directory: ${rootDir}`);
+  if (targetDir) console.log(`Target directory: ${targetDir}`);
   if (isLibrary) console.log('** LIBRARY MODE - skipping build tool dependencies **');
   if (dryRun) console.log('** DRY RUN MODE **\n');
 
@@ -730,8 +751,12 @@ function main() {
     console.log('  YAML deps:', [...yamlDeps].join(', '));
   }
 
-  // Start with existing service dependencies
-  const existingDeps = { ...servicePackageJson.dependencies };
+  // Start with existing dependencies from both source and target (if using --target-dir)
+  // This preserves deps that build tools like ng-packagr add (e.g., tslib)
+  const existingDeps = {
+    ...servicePackageJson.dependencies,
+    ...(targetDir ? outputPackageJson.dependencies : {}),
+  };
   const requiredDeps = new Set();
 
   // Add all scanned imports to required deps
@@ -903,22 +928,24 @@ function main() {
     return;
   }
 
-  // Create backup before modifying
-  createBackup(servicePackageJsonPath);
+  // Create backup before modifying (skip when using --target-dir since we're not modifying source)
+  if (!targetDir) {
+    createBackup(servicePackageJsonPath);
+  }
 
-  // Update service package.json
-  servicePackageJson.dependencies = sortedDependencies;
-  delete servicePackageJson.devDependencies;
+  // Update the output package.json (either target or source)
+  outputPackageJson.dependencies = sortedDependencies;
+  delete outputPackageJson.devDependencies;
 
   // Copy overrides from root package.json (for vulnerability fixes)
   // Overrides apply to transitive dependencies - unused ones are safely ignored by npm
   if (overrideCount > 0) {
-    servicePackageJson.overrides = rootOverrides;
+    outputPackageJson.overrides = rootOverrides;
   }
 
-  // Write updated package.json
-  fs.writeFileSync(servicePackageJsonPath, JSON.stringify(servicePackageJson, null, 2) + '\n');
-  console.log(`\nUpdated ${servicePackageJsonPath}`);
+  // Write updated package.json to target location
+  fs.writeFileSync(outputPackageJsonPath, JSON.stringify(outputPackageJson, null, 2) + '\n');
+  console.log(`\nUpdated ${outputPackageJsonPath}`);
   console.log(`Total dependencies in standalone package: ${Object.keys(sortedDependencies).length}`);
   if (overrideCount > 0) {
     console.log(`Total overrides copied: ${overrideCount}`);

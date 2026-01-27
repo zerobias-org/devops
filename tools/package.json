@@ -30,6 +30,7 @@
     "prepublishtest": "scripts/prepublishtest.sh",
     "publish": "scripts/publish.sh",
     "detect-changes": "scripts/detect-changes.sh",
-    "get-changed-package-names": "scripts/get-changed-package-names.sh"
+    "get-changed-package-names": "scripts/get-changed-package-names.sh",
+    "sort-by-deps": "scripts/sort-by-deps.sh"
   }
 }

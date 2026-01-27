@@ -162,8 +162,12 @@ runs:
         export PUBLISH_TOKEN
         export READ_TOKEN
 
-        # Publish packages sequentially
-        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+        # Sort packages by dependency order (packages with no internal deps first)
+        SORTED_DIRS=$(npx sort-by-deps ${{ steps.detect_changes.outputs.CHANGED_DIRS }})
+        echo "Publish order: $SORTED_DIRS"
+
+        # Publish packages in dependency order
+        for pkg in $SORTED_DIRS; do
           if [ -f "$pkg/package.json" ]; then
             echo "Publishing $pkg with latest tag"
             TEMP_PUBLISH_DIR=$(mktemp -d)

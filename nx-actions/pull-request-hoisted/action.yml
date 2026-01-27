@@ -48,7 +48,7 @@ runs:
       run: |
         # Detect packages with actual source changes (ignoring lock files)
         # Compare against origin/main to find all changes on this branch
-        CHANGED_DIRS=$(npx detect-changes origin/main)
+        CHANGED_DIRS=$(npx detect-changes origin/main --hoisted)
         if [ -z "$CHANGED_DIRS" ]; then
           echo "No packages changed, skipping build/publish"
           echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT

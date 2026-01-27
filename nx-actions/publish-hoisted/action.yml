@@ -61,7 +61,7 @@ runs:
         echo "Using base ref: $LAST_PUBLISH_TAG"
 
         # Detect packages with actual source changes (ignoring lock files)
-        CHANGED_DIRS=$(npx detect-changes "$LAST_PUBLISH_TAG")
+        CHANGED_DIRS=$(npx detect-changes "$LAST_PUBLISH_TAG" --hoisted)
         if [ -z "$CHANGED_DIRS" ]; then
           echo "No packages changed, skipping build/publish"
           echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
@@ -77,13 +77,6 @@ runs:
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
-
-    - name: CDN Update
-      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
-      uses: zerobias-org/devops/nx-actions/cdn-update@main
-      with:
-        update-all: ${{ inputs.update-all }}
-        changed-dirs: ${{ steps.detect_changes.outputs.CHANGED_DIRS }}
 
     - name: Build changed packages
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'

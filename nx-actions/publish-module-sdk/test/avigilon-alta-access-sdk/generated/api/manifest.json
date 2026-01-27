@@ -1,0 +1,1840 @@
+{
+  "serviceName": "AvigilonAltaAccess",
+  "version": "1.0.24",
+  "codegenVersion": "2.0.14",
+  "generatedAt": "2026-01-26T15:44:55Z",
+  "clientClass": "AvigilonAltaAccessClient",
+  "factoryFunction": "newAvigilonAltaAccess",
+  "operations": [
+    {
+      "operationId": "listAuditLogs",
+      "nickname": "listAuditLogs",
+      "apiClass": "AuditApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/reports/auditLogs/ui",
+      "summary": "Retrieves audit logs for the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "filter",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Filter criteria for audit logs (e.g., &quot;timestamp:(1753282000--1753284000)&quot;)"
+        },
+        {
+          "name": "options",
+          "in": "query",
+          "required": false,
+          "type": "string",
+          "description": "Search options (e.g., &quot;searchId:123-456-0&quot;)"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;AuditLogEntry&gt;"
+    }
+,
+    {
+      "operationId": "getTokenProperties",
+      "nickname": "getTokenProperties",
+      "apiClass": "AuthApi",
+      "method": "GET",
+      "path": "/accessToken",
+      "summary": "Retrieves properties and metadata for the current access token",
+      "tags": [""],
+      "parameters": [
+      ],
+      "returnType": "TokenProperties"
+    }
+,
+    {
+      "operationId": "listCardFormats",
+      "nickname": "listCardFormats",
+      "apiClass": "CredentialApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/cardFormats",
+      "summary": "Retrieves all card formats in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;CardFormat&gt;"
+    },
+    {
+      "operationId": "listCredentialActionTypes",
+      "nickname": "listCredentialActionTypes",
+      "apiClass": "CredentialApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/credentialActionTypes",
+      "summary": "Retrieves all credential action types in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;CredentialActionType&gt;"
+    },
+    {
+      "operationId": "listCredentialActions",
+      "nickname": "listCredentialActions",
+      "apiClass": "CredentialApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/credentials/{credentialId}/credentialActions",
+      "summary": "Retrieves all actions performed on a specific credential",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "credentialId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a credential"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;CredentialAction&gt;"
+    },
+    {
+      "operationId": "listCredentialTypes",
+      "nickname": "listCredentialTypes",
+      "apiClass": "CredentialApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/credentialTypes",
+      "summary": "Retrieves all credential types in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;CredentialType&gt;"
+    },
+    {
+      "operationId": "listOrgCredentials",
+      "nickname": "listOrgCredentials",
+      "apiClass": "CredentialApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/credentials",
+      "summary": "Retrieves all credentials in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;OrgCredential&gt;"
+    }
+,
+    {
+      "operationId": "getEntry",
+      "nickname": "get",
+      "apiClass": "EntryApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/entries/{entryId}",
+      "summary": "Retrieves detailed information for a specific entry",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "entryId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for an entry"
+        }
+      ],
+      "returnType": "EntryInfo"
+    },
+    {
+      "operationId": "listEntries",
+      "nickname": "list",
+      "apiClass": "EntryApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/entries",
+      "summary": "Retrieves all entries in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Entry&gt;"
+    },
+    {
+      "operationId": "listEntryActivity",
+      "nickname": "listActivity",
+      "apiClass": "EntryApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/entries/{entryId}/activity",
+      "summary": "Retrieves activity report for a specific entry",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "entryId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for an entry"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;EntryActivityEvent&gt;"
+    },
+    {
+      "operationId": "listEntryCameras",
+      "nickname": "listCameras",
+      "apiClass": "EntryApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/entries/{entryId}/cameras",
+      "summary": "Retrieves all cameras associated with a specific entry",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "entryId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for an entry"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;EntryCamera&gt;"
+    },
+    {
+      "operationId": "listEntryStates",
+      "nickname": "listEntryStates",
+      "apiClass": "EntryApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/entryStates",
+      "summary": "Retrieves all entry states in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;EntryStateInfo&gt;"
+    },
+    {
+      "operationId": "listEntryUserSchedules",
+      "nickname": "listUserSchedules",
+      "apiClass": "EntryApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/entries/{entryId}/userSchedules",
+      "summary": "Retrieves all active users with their associated schedules that have access to a specific entry",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "entryId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for an entry"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;EntryUserSchedule&gt;"
+    },
+    {
+      "operationId": "listEntryUsers",
+      "nickname": "listUsers",
+      "apiClass": "EntryApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/entries/{entryId}/users",
+      "summary": "Retrieves all active users that have access to a specific entry",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "entryId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for an entry"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;EntryUser&gt;"
+    }
+,
+    {
+      "operationId": "getGroup",
+      "nickname": "get",
+      "apiClass": "GroupApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/groups/{groupId}",
+      "summary": "Retrieves single access group details by group ID",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a group"
+        }
+      ],
+      "returnType": "GroupInfo"
+    },
+    {
+      "operationId": "listGroupEntries",
+      "nickname": "listEntries",
+      "apiClass": "GroupApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/groups/{groupId}/entries",
+      "summary": "Retrieves all entries/permissions for a specific group",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a group"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Entry&gt;"
+    },
+    {
+      "operationId": "listGroupUsers",
+      "nickname": "listUsers",
+      "apiClass": "GroupApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/groups/{groupId}/users",
+      "summary": "Retrieves all users belonging to a specific group",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a group"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;User&gt;"
+    },
+    {
+      "operationId": "listGroupZoneGroups",
+      "nickname": "listZoneGroups",
+      "apiClass": "GroupApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/groups/{groupId}/zoneGroups",
+      "summary": "Retrieves all zones and their associated configurations for a specific group",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a group"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;GroupZoneGroup&gt;"
+    },
+    {
+      "operationId": "listGroupZones",
+      "nickname": "listZones",
+      "apiClass": "GroupApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/groups/{groupId}/zones",
+      "summary": "Retrieves all zones for a specific group",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a group"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;GroupZone&gt;"
+    },
+    {
+      "operationId": "listGroups",
+      "nickname": "list",
+      "apiClass": "GroupApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/groups",
+      "summary": "Retrieves all access groups in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Group&gt;"
+    }
+,
+    {
+      "operationId": "getIdentityProviderGroupRelations",
+      "nickname": "getIdentityProviderGroupRelations",
+      "apiClass": "IdentityProviderApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/identityProviders/{identityProviderId}/groupRelations",
+      "summary": "Retrieves group relations for a specific identity provider",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "identityProviderId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for an identity provider"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;IdentityProviderGroupRelation&gt;"
+    },
+    {
+      "operationId": "getIdentityProviderType",
+      "nickname": "getIdentityProviderType",
+      "apiClass": "IdentityProviderApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/identityProviderTypes/{identityProviderTypeId}",
+      "summary": "Retrieves detailed information for a specific identity provider type",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "identityProviderTypeId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for an identity provider type"
+        }
+      ],
+      "returnType": "IdentityProviderTypeInfo"
+    },
+    {
+      "operationId": "listIdentityProviderGroups",
+      "nickname": "listIdentityProviderGroups",
+      "apiClass": "IdentityProviderApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/identityProviders/{identityProviderId}/groups",
+      "summary": "Retrieves all groups from a specific identity provider",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "identityProviderId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for an identity provider"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;IdentityProviderGroup&gt;"
+    },
+    {
+      "operationId": "listIdentityProviderTypes",
+      "nickname": "listIdentityProviderTypes",
+      "apiClass": "IdentityProviderApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/identityProviderTypes",
+      "summary": "Retrieves all identity provider types in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;IdentityProviderType&gt;"
+    },
+    {
+      "operationId": "listIdentityProviders",
+      "nickname": "listIdentityProviders",
+      "apiClass": "IdentityProviderApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/identityProviders",
+      "summary": "Retrieves all identity providers in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;IdentityProvider&gt;"
+    }
+,
+    {
+      "operationId": "listRoleUsers",
+      "nickname": "listRoleUsers",
+      "apiClass": "RoleApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/roles/{roleId}/users",
+      "summary": "Retrieves all users assigned to a specific role",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "roleId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a role"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;RoleUser&gt;"
+    },
+    {
+      "operationId": "listRoles",
+      "nickname": "listRoles",
+      "apiClass": "RoleApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/roles",
+      "summary": "Retrieves all roles in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;RoleInfo&gt;"
+    }
+,
+    {
+      "operationId": "listScheduleEvents",
+      "nickname": "listScheduleEvents",
+      "apiClass": "ScheduleApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/schedules/{scheduleId}/events",
+      "summary": "Retrieves all events for a specific schedule",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "scheduleId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a schedule"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;ScheduleEvent&gt;"
+    },
+    {
+      "operationId": "listScheduleTypes",
+      "nickname": "listScheduleTypes",
+      "apiClass": "ScheduleApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/scheduleTypes",
+      "summary": "Retrieves all schedule types in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;ScheduleType&gt;"
+    },
+    {
+      "operationId": "listSchedules",
+      "nickname": "listSchedules",
+      "apiClass": "ScheduleApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/schedules",
+      "summary": "Retrieves all schedules in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Schedule&gt;"
+    }
+,
+    {
+      "operationId": "listSites",
+      "nickname": "list",
+      "apiClass": "SiteApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/sites",
+      "summary": "Retrieves all sites in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Site&gt;"
+    }
+,
+    {
+      "operationId": "getUser",
+      "nickname": "get",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/users/{userId}",
+      "summary": "Retrieves single user details by user ID",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a user"
+        }
+      ],
+      "returnType": "UserInfo"
+    },
+    {
+      "operationId": "listOrgIdentities",
+      "nickname": "listOrgIdentities",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/orgIdentities",
+      "summary": "Retrieves all identities in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;OrgIdentity&gt;"
+    },
+    {
+      "operationId": "listOrgPictures",
+      "nickname": "listOrgPictures",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/orgPictures",
+      "summary": "Retrieves all organization pictures",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;OrgPicture&gt;"
+    },
+    {
+      "operationId": "listSharedUsers",
+      "nickname": "listSharedUsers",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/sharedUsers",
+      "summary": "Retrieves all users shared from other organizations",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;SharedUser&gt;"
+    },
+    {
+      "operationId": "listUserActivity",
+      "nickname": "listActivity",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/users/{userId}/activity",
+      "summary": "Retrieves activity report for a specific user",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a user"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;UserActivityEvent&gt;"
+    },
+    {
+      "operationId": "listUserCredentials",
+      "nickname": "listCredentials",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/users/{userId}/credentials",
+      "summary": "Retrieves all credentials for a specific user",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a user"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;UserCredential&gt;"
+    },
+    {
+      "operationId": "listUserEntries",
+      "nickname": "listEntries",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/users/{userId}/entries",
+      "summary": "Retrieves all entries/access permissions for a specific user",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a user"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;UserEntry&gt;"
+    },
+    {
+      "operationId": "listUserGroups",
+      "nickname": "listGroups",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/users/{userId}/groups",
+      "summary": "Retrieves all groups a specific user belongs to",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a user"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Group&gt;"
+    },
+    {
+      "operationId": "listUserMfaCredentials",
+      "nickname": "listMfaCredentials",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/users/{userId}/mfaCredentials",
+      "summary": "Retrieves all MFA credentials for a specific user",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a user"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;MfaCredential&gt;"
+    },
+    {
+      "operationId": "listUserPictures",
+      "nickname": "listPictures",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/users/{userId}/userPictures",
+      "summary": "Retrieves all pictures for a specific user",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a user"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;UserPicture&gt;"
+    },
+    {
+      "operationId": "listUserRoles",
+      "nickname": "listRoles",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/users/{userId}/roles",
+      "summary": "Retrieves all roles assigned to a specific user",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a user"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Role&gt;"
+    },
+    {
+      "operationId": "listUserSites",
+      "nickname": "listSites",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/users/{userId}/sites",
+      "summary": "Retrieves all sites associated with a specific user",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a user"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Site&gt;"
+    },
+    {
+      "operationId": "listUserZoneUsers",
+      "nickname": "listZoneUsers",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/users/{userId}/zoneUsers",
+      "summary": "Retrieves all zones and their associated configurations a user has access to",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a user"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;UserZoneUser&gt;"
+    },
+    {
+      "operationId": "listUserZones",
+      "nickname": "listZones",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/users/{userId}/zones",
+      "summary": "Retrieves all zones associated with a specific user",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "userId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a user"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;UserZone&gt;"
+    },
+    {
+      "operationId": "listUsers",
+      "nickname": "list",
+      "apiClass": "UserApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/users",
+      "summary": "Retrieves all users in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;User&gt;"
+    }
+,
+    {
+      "operationId": "listZoneShares",
+      "nickname": "listZoneShares",
+      "apiClass": "ZoneApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/zones/{zoneId}/zoneShares",
+      "summary": "Retrieves all zone shares for a specific zone",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "zoneId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a zone"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;ZoneShare&gt;"
+    },
+    {
+      "operationId": "listZoneZoneUsers",
+      "nickname": "listZoneUsers",
+      "apiClass": "ZoneApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/zones/{zoneId}/zoneUsers",
+      "summary": "Retrieves all zone users with their access configurations for a specific zone",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "zoneId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for a zone"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;ZoneZoneUser&gt;"
+    },
+    {
+      "operationId": "listZones",
+      "nickname": "list",
+      "apiClass": "ZoneApi",
+      "method": "GET",
+      "path": "/organizations/{organizationId}/zones",
+      "summary": "Retrieves all zones in the organization",
+      "tags": [""],
+      "parameters": [
+        {
+          "name": "organizationId",
+          "in": "path",
+          "required": true,
+          "type": "string",
+          "description": "Unique identifier for the organization"
+        },
+        {
+          "name": "pageNumber",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The requested page. This value is 1-indexed."
+        },
+        {
+          "name": "pageSize",
+          "in": "query",
+          "required": false,
+          "type": "number",
+          "description": "The number of items in each page of data."
+        }
+      ],
+      "returnType": "PagedResults&lt;Zone&gt;"
+    }
+
+  ],
+  "operationMap": {
+    "listAuditLogs": "AuditApi.listAuditLogs"
+,
+    "getTokenProperties": "AuthApi.getTokenProperties"
+,
+    "listCardFormats": "CredentialApi.listCardFormats",
+    "listCredentialActionTypes": "CredentialApi.listCredentialActionTypes",
+    "listCredentialActions": "CredentialApi.listCredentialActions",
+    "listCredentialTypes": "CredentialApi.listCredentialTypes",
+    "listOrgCredentials": "CredentialApi.listOrgCredentials"
+,
+    "getEntry": "EntryApi.get",
+    "listEntries": "EntryApi.list",
+    "listEntryActivity": "EntryApi.listActivity",
+    "listEntryCameras": "EntryApi.listCameras",
+    "listEntryStates": "EntryApi.listEntryStates",
+    "listEntryUserSchedules": "EntryApi.listUserSchedules",
+    "listEntryUsers": "EntryApi.listUsers"
+,
+    "getGroup": "GroupApi.get",
+    "listGroupEntries": "GroupApi.listEntries",
+    "listGroupUsers": "GroupApi.listUsers",
+    "listGroupZoneGroups": "GroupApi.listZoneGroups",
+    "listGroupZones": "GroupApi.listZones",
+    "listGroups": "GroupApi.list"
+,
+    "getIdentityProviderGroupRelations": "IdentityProviderApi.getIdentityProviderGroupRelations",
+    "getIdentityProviderType": "IdentityProviderApi.getIdentityProviderType",
+    "listIdentityProviderGroups": "IdentityProviderApi.listIdentityProviderGroups",
+    "listIdentityProviderTypes": "IdentityProviderApi.listIdentityProviderTypes",
+    "listIdentityProviders": "IdentityProviderApi.listIdentityProviders"
+,
+    "listRoleUsers": "RoleApi.listRoleUsers",
+    "listRoles": "RoleApi.listRoles"
+,
+    "listScheduleEvents": "ScheduleApi.listScheduleEvents",
+    "listScheduleTypes": "ScheduleApi.listScheduleTypes",
+    "listSchedules": "ScheduleApi.listSchedules"
+,
+    "listSites": "SiteApi.list"
+,
+    "getUser": "UserApi.get",
+    "listOrgIdentities": "UserApi.listOrgIdentities",
+    "listOrgPictures": "UserApi.listOrgPictures",
+    "listSharedUsers": "UserApi.listSharedUsers",
+    "listUserActivity": "UserApi.listActivity",
+    "listUserCredentials": "UserApi.listCredentials",
+    "listUserEntries": "UserApi.listEntries",
+    "listUserGroups": "UserApi.listGroups",
+    "listUserMfaCredentials": "UserApi.listMfaCredentials",
+    "listUserPictures": "UserApi.listPictures",
+    "listUserRoles": "UserApi.listRoles",
+    "listUserSites": "UserApi.listSites",
+    "listUserZoneUsers": "UserApi.listZoneUsers",
+    "listUserZones": "UserApi.listZones",
+    "listUsers": "UserApi.list"
+,
+    "listZoneShares": "ZoneApi.listZoneShares",
+    "listZoneZoneUsers": "ZoneApi.listZoneUsers",
+    "listZones": "ZoneApi.list"
+
+  }
+}

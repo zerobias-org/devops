@@ -52,7 +52,7 @@ jobs:
 
       - name: Install nx
         run: |
-          npm install -g nx@20.5.0
+          npm install -g nx@22.4.2
         env:
           NPM_TOKEN: ${{ env.NPM_TOKEN }}
           READ_TOKEN: ${{ env.READ_TOKEN }}

@@ -1,0 +1,19 @@
+{
+  "name": "sdk-test",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test:api-client": "node dist/test-api-client.js",
+    "test:hub-module": "node dist/test-hub-module.js",
+    "test": "npm run build && npm run test:api-client && npm run test:hub-module"
+  },
+  "dependencies": {
+    "@zerobias-org/module-avigilon-alta-access-sdk": "^1.0.24",
+    "@zerobias-org/module-avigilon-alta-access-hub-sdk": "^1.0.24"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.7",
+    "typescript": "^5.9.3"
+  }
+}

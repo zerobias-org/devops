@@ -1,0 +1,3656 @@
+openapi: 3.0.3
+info:
+  x-product-infos:
+    - name: Avigilon Alta Access
+      versions:
+        - 1.0.0-rc.1
+      package: avigilon.alta.access
+      description: Avigilon Alta Access cloud-based access control system
+      link: https://www.avigilon.com/products/access-control-systems/avigilon-alta-access/
+      contentType: json
+  version: 1.0.24
+  title: '@zerobias-org/module-avigilon-alta-access-hub-sdk'
+  description: module-avigilon-alta-access-hub-sdk Hub SDK (with Hub routing support)
+  x-impl-name: AvigilonAltaAccess
+tags:
+  - name: user
+    description: User management operations
+  - name: group
+    description: Group management operations
+  - name: site
+    description: Site management operations
+  - name: zone
+    description: Zone management operations
+  - name: auth
+    description: Authentication operations
+  - name: entry
+    description: Entry management operations
+  - name: credential
+    description: Credential management operations
+  - name: identityProvider
+    description: Identity provider management operations
+  - name: schedule
+    description: Schedule management operations
+  - name: role
+    description: Role management operations
+  - name: audit
+    description: Audit log operations
+paths:
+  /organizations/{organizationId}/users:
+    get:
+      tags:
+        - user
+      summary: Retrieves all users in the organization
+      operationId: listUsers
+      x-method-name: list
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of users
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+      security:
+        - access-token:
+            - read:users
+  /organizations/{organizationId}/users/{userId}:
+    get:
+      tags:
+        - user
+      summary: Retrieves single user details by user ID
+      operationId: getUser
+      x-method-name: get
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/userIdParam'
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+      security:
+        - access-token:
+            - read:users
+  /organizations/{organizationId}/users/{userId}/roles:
+    get:
+      tags:
+        - user
+      summary: Retrieves all roles assigned to a specific user
+      operationId: listUserRoles
+      x-method-name: listRoles
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/userIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of user roles
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+      security:
+        - access-token:
+            - read:user-roles
+  /organizations/{organizationId}/users/{userId}/sites:
+    get:
+      tags:
+        - user
+      summary: Retrieves all sites associated with a specific user
+      operationId: listUserSites
+      x-method-name: listSites
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/userIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of user sites
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Site'
+      security:
+        - access-token:
+            - read:user-sites
+  /organizations/{organizationId}/groups:
+    get:
+      tags:
+        - group
+      summary: Retrieves all access groups in the organization
+      operationId: listGroups
+      x-method-name: list
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of groups
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Group'
+      security:
+        - access-token:
+            - read:groups
+  /organizations/{organizationId}/groups/{groupId}:
+    get:
+      tags:
+        - group
+      summary: Retrieves single access group details by group ID
+      operationId: getGroup
+      x-method-name: get
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/groupIdParam'
+      responses:
+        '200':
+          description: Group details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupInfo'
+      security:
+        - access-token:
+            - read:groups
+  /organizations/{organizationId}/groups/{groupId}/users:
+    get:
+      tags:
+        - group
+      summary: Retrieves all users belonging to a specific group
+      operationId: listGroupUsers
+      x-method-name: listUsers
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/groupIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of group users
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+      security:
+        - access-token:
+            - read:group-users
+  /organizations/{organizationId}/groups/{groupId}/entries:
+    get:
+      tags:
+        - group
+      summary: Retrieves all entries/permissions for a specific group
+      operationId: listGroupEntries
+      x-method-name: listEntries
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/groupIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of group entries
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Entry'
+      security:
+        - access-token:
+            - read:group-entries
+  /organizations/{organizationId}/sites:
+    get:
+      tags:
+        - site
+      summary: Retrieves all sites in the organization
+      operationId: listSites
+      x-method-name: list
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of sites
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Site'
+      security:
+        - access-token:
+            - read:sites
+  /organizations/{organizationId}/zones:
+    get:
+      tags:
+        - zone
+      summary: Retrieves all zones in the organization
+      operationId: listZones
+      x-method-name: list
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of zones
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Zone'
+      security:
+        - access-token:
+            - read:zones
+  /accessToken:
+    get:
+      tags:
+        - auth
+      summary: Retrieves properties and metadata for the current access token
+      operationId: getTokenProperties
+      x-method-name: getTokenProperties
+      responses:
+        '200':
+          description: Token properties and metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenProperties'
+      security:
+        - access-token: []
+  /organizations/{organizationId}/entries:
+    get:
+      tags:
+        - entry
+      summary: Retrieves all entries in the organization
+      operationId: listEntries
+      x-method-name: list
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of entries
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Entry'
+      security:
+        - access-token:
+            - read:entries
+  /organizations/{organizationId}/users/{userId}/zones:
+    get:
+      tags:
+        - user
+      summary: Retrieves all zones associated with a specific user
+      operationId: listUserZones
+      x-method-name: listZones
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/userIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of user zones
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserZone'
+      security:
+        - access-token:
+            - read:user-zones
+  /organizations/{organizationId}/users/{userId}/mfaCredentials:
+    get:
+      tags:
+        - user
+      summary: Retrieves all MFA credentials for a specific user
+      operationId: listUserMfaCredentials
+      x-method-name: listMfaCredentials
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/userIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of user MFA credentials
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MfaCredential'
+      security:
+        - access-token:
+            - read:user-mfa
+  /organizations/{organizationId}/users/{userId}/userPictures:
+    get:
+      tags:
+        - user
+      summary: Retrieves all pictures for a specific user
+      operationId: listUserPictures
+      x-method-name: listPictures
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/userIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of user pictures
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserPicture'
+      security:
+        - access-token:
+            - read:user-pictures
+  /organizations/{organizationId}/users/{userId}/groups:
+    get:
+      tags:
+        - user
+      summary: Retrieves all groups a specific user belongs to
+      operationId: listUserGroups
+      x-method-name: listGroups
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/userIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of user groups
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Group'
+      security:
+        - access-token:
+            - read:user-groups
+  /organizations/{organizationId}/users/{userId}/entries:
+    get:
+      tags:
+        - user
+      summary: Retrieves all entries/access permissions for a specific user
+      operationId: listUserEntries
+      x-method-name: listEntries
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/userIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of user entries
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserEntry'
+      security:
+        - access-token:
+            - read:user-entries
+  /organizations/{organizationId}/users/{userId}/zoneUsers:
+    get:
+      tags:
+        - user
+      summary: Retrieves all zones and their associated configurations a user has access to
+      operationId: listUserZoneUsers
+      x-method-name: listZoneUsers
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/userIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of user zone configurations
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserZoneUser'
+      security:
+        - access-token:
+            - read:user-zones
+  /organizations/{organizationId}/users/{userId}/credentials:
+    get:
+      tags:
+        - user
+      summary: Retrieves all credentials for a specific user
+      operationId: listUserCredentials
+      x-method-name: listCredentials
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/userIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of user credentials
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserCredential'
+      security:
+        - access-token:
+            - read:user-credentials
+  /organizations/{organizationId}/users/{userId}/activity:
+    get:
+      tags:
+        - user
+      summary: Retrieves activity report for a specific user
+      operationId: listUserActivity
+      x-method-name: listActivity
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/userIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: User activity report
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserActivityEvent'
+      security:
+        - access-token:
+            - read:user-activity
+  /organizations/{organizationId}/credentialTypes:
+    get:
+      tags:
+        - credential
+      summary: Retrieves all credential types in the organization
+      operationId: listCredentialTypes
+      x-method-name: listCredentialTypes
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of credential types
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CredentialType'
+      security:
+        - access-token:
+            - read:credential-types
+  /organizations/{organizationId}/entries/{entryId}:
+    get:
+      tags:
+        - entry
+      summary: Retrieves detailed information for a specific entry
+      operationId: getEntry
+      x-method-name: get
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/entryIdParam'
+      responses:
+        '200':
+          description: Entry details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryInfo'
+      security:
+        - access-token:
+            - read:entries
+  /organizations/{organizationId}/entries/{entryId}/cameras:
+    get:
+      tags:
+        - entry
+      summary: Retrieves all cameras associated with a specific entry
+      operationId: listEntryCameras
+      x-method-name: listCameras
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/entryIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of entry cameras
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EntryCamera'
+      security:
+        - access-token:
+            - read:entry-cameras
+  /organizations/{organizationId}/entries/{entryId}/users:
+    get:
+      tags:
+        - entry
+      summary: Retrieves all active users that have access to a specific entry
+      operationId: listEntryUsers
+      x-method-name: listUsers
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/entryIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of users with access to the entry
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EntryUser'
+      security:
+        - access-token:
+            - read:entry-users
+  /organizations/{organizationId}/entries/{entryId}/userSchedules:
+    get:
+      tags:
+        - entry
+      summary: Retrieves all active users with their associated schedules that have access to a specific entry
+      operationId: listEntryUserSchedules
+      x-method-name: listUserSchedules
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/entryIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of users with schedules for the entry
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EntryUserSchedule'
+      security:
+        - access-token:
+            - read:entry-user-schedules
+  /organizations/{organizationId}/entries/{entryId}/activity:
+    get:
+      tags:
+        - entry
+      summary: Retrieves activity report for a specific entry
+      operationId: listEntryActivity
+      x-method-name: listActivity
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/entryIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: Entry activity report
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EntryActivityEvent'
+      security:
+        - access-token:
+            - read:entry-activity
+  /organizations/{organizationId}/entryStates:
+    get:
+      tags:
+        - entry
+      summary: Retrieves all entry states in the organization
+      operationId: listEntryStates
+      x-method-name: listEntryStates
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of entry states
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EntryStateInfo'
+      security:
+        - access-token:
+            - read:entry-states
+  /organizations/{organizationId}/groups/{groupId}/zones:
+    get:
+      tags:
+        - group
+      summary: Retrieves all zones for a specific group
+      operationId: listGroupZones
+      x-method-name: listZones
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/groupIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of group zones
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GroupZone'
+      security:
+        - access-token:
+            - read:group-zones
+  /organizations/{organizationId}/groups/{groupId}/zoneGroups:
+    get:
+      tags:
+        - group
+      summary: Retrieves all zones and their associated configurations for a specific group
+      operationId: listGroupZoneGroups
+      x-method-name: listZoneGroups
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/groupIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of group zone configurations
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GroupZoneGroup'
+      security:
+        - access-token:
+            - read:group-zone-groups
+  /organizations/{organizationId}/identityProviderTypes:
+    get:
+      tags:
+        - identityProvider
+      summary: Retrieves all identity provider types in the organization
+      operationId: listIdentityProviderTypes
+      x-method-name: listIdentityProviderTypes
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of identity provider types
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IdentityProviderType'
+      security:
+        - access-token:
+            - read:identity-provider-types
+  /organizations/{organizationId}/identityProviderTypes/{identityProviderTypeId}:
+    get:
+      tags:
+        - identityProvider
+      summary: Retrieves detailed information for a specific identity provider type
+      operationId: getIdentityProviderType
+      x-method-name: getIdentityProviderType
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - name: identityProviderTypeId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique identifier for an identity provider type
+      responses:
+        '200':
+          description: Identity provider type details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityProviderTypeInfo'
+      security:
+        - access-token:
+            - read:identity-provider-types
+  /organizations/{organizationId}/identityProviders:
+    get:
+      tags:
+        - identityProvider
+      summary: Retrieves all identity providers in the organization
+      operationId: listIdentityProviders
+      x-method-name: listIdentityProviders
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of identity providers
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IdentityProvider'
+      security:
+        - access-token:
+            - read:identity-providers
+  /organizations/{organizationId}/identityProviders/{identityProviderId}/groups:
+    get:
+      tags:
+        - identityProvider
+      summary: Retrieves all groups from a specific identity provider
+      operationId: listIdentityProviderGroups
+      x-method-name: listIdentityProviderGroups
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/identityProviderIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of identity provider groups
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IdentityProviderGroup'
+      security:
+        - access-token:
+            - read:identity-provider-groups
+  /organizations/{organizationId}/identityProviders/{identityProviderId}/groupRelations:
+    get:
+      tags:
+        - identityProvider
+      summary: Retrieves group relations for a specific identity provider
+      operationId: getIdentityProviderGroupRelations
+      x-method-name: getIdentityProviderGroupRelations
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/identityProviderIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of identity provider group relations
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IdentityProviderGroupRelation'
+      security:
+        - access-token:
+            - read:identity-provider-groups
+  /organizations/{organizationId}/orgPictures:
+    get:
+      tags:
+        - user
+      summary: Retrieves all organization pictures
+      operationId: listOrgPictures
+      x-method-name: listOrgPictures
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of organization pictures
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrgPicture'
+      security:
+        - access-token:
+            - read:org-pictures
+  /organizations/{organizationId}/roles:
+    get:
+      tags:
+        - role
+      summary: Retrieves all roles in the organization
+      operationId: listRoles
+      x-method-name: listRoles
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of roles
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoleInfo'
+      security:
+        - access-token:
+            - read:roles
+  /organizations/{organizationId}/zones/{zoneId}/zoneShares:
+    get:
+      tags:
+        - zone
+      summary: Retrieves all zone shares for a specific zone
+      operationId: listZoneShares
+      x-method-name: listZoneShares
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/zoneIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of zone shares
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ZoneShare'
+      security:
+        - access-token:
+            - read:zone-shares
+  /organizations/{organizationId}/zones/{zoneId}/zoneUsers:
+    get:
+      tags:
+        - zone
+      summary: Retrieves all zone users with their access configurations for a specific zone
+      operationId: listZoneZoneUsers
+      x-method-name: listZoneUsers
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/zoneIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of zone user configurations
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ZoneZoneUser'
+      security:
+        - access-token:
+            - read:zone-users
+  /organizations/{organizationId}/credentialActionTypes:
+    get:
+      tags:
+        - credential
+      summary: Retrieves all credential action types in the organization
+      operationId: listCredentialActionTypes
+      x-method-name: listCredentialActionTypes
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of credential action types
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CredentialActionType'
+      security:
+        - access-token:
+            - read:credential-action-types
+  /organizations/{organizationId}/credentials:
+    get:
+      tags:
+        - credential
+      summary: Retrieves all credentials in the organization
+      operationId: listOrgCredentials
+      x-method-name: listOrgCredentials
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of organization credentials
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrgCredential'
+      security:
+        - access-token:
+            - read:credentials
+  /organizations/{organizationId}/credentials/{credentialId}/credentialActions:
+    get:
+      tags:
+        - credential
+      summary: Retrieves all actions performed on a specific credential
+      operationId: listCredentialActions
+      x-method-name: listCredentialActions
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/credentialIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of credential actions
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CredentialAction'
+      security:
+        - access-token:
+            - read:credential-actions
+  /organizations/{organizationId}/cardFormats:
+    get:
+      tags:
+        - credential
+      summary: Retrieves all card formats in the organization
+      operationId: listCardFormats
+      x-method-name: listCardFormats
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of card formats
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CardFormat'
+      security:
+        - access-token:
+            - read:card-formats
+  /organizations/{organizationId}/sharedUsers:
+    get:
+      tags:
+        - user
+      summary: Retrieves all users shared from other organizations
+      operationId: listSharedUsers
+      x-method-name: listSharedUsers
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of shared users
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SharedUser'
+      security:
+        - access-token:
+            - read:shared-users
+  /organizations/{organizationId}/orgIdentities:
+    get:
+      tags:
+        - user
+      summary: Retrieves all identities in the organization
+      operationId: listOrgIdentities
+      x-method-name: listOrgIdentities
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of organization identities
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrgIdentity'
+      security:
+        - access-token:
+            - read:org-identities
+  /organizations/{organizationId}/reports/auditLogs/ui:
+    get:
+      tags:
+        - audit
+      summary: Retrieves audit logs for the organization
+      operationId: listAuditLogs
+      x-method-name: listAuditLogs
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - name: filter
+          in: query
+          schema:
+            type: string
+          description: Filter criteria for audit logs (e.g., "timestamp:(1753282000--1753284000)")
+        - name: options
+          in: query
+          schema:
+            type: string
+          description: Search options (e.g., "searchId:123-456-0")
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: Audit log entries
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLogEntry'
+      security:
+        - access-token:
+            - read:audit-logs
+  /organizations/{organizationId}/scheduleTypes:
+    get:
+      tags:
+        - schedule
+      summary: Retrieves all schedule types in the organization
+      operationId: listScheduleTypes
+      x-method-name: listScheduleTypes
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of schedule types
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScheduleType'
+      security:
+        - access-token:
+            - read:schedule-types
+  /organizations/{organizationId}/schedules:
+    get:
+      tags:
+        - schedule
+      summary: Retrieves all schedules in the organization
+      operationId: listSchedules
+      x-method-name: listSchedules
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of schedules
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Schedule'
+      security:
+        - access-token:
+            - read:schedules
+  /organizations/{organizationId}/schedules/{scheduleId}/events:
+    get:
+      tags:
+        - schedule
+      summary: Retrieves all events for a specific schedule
+      operationId: listScheduleEvents
+      x-method-name: listScheduleEvents
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/scheduleIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of schedule events
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScheduleEvent'
+      security:
+        - access-token:
+            - read:schedule-events
+  /organizations/{organizationId}/roles/{roleId}/users:
+    get:
+      tags:
+        - role
+      summary: Retrieves all users assigned to a specific role
+      operationId: listRoleUsers
+      x-method-name: listRoleUsers
+      parameters:
+        - $ref: '#/components/parameters/organizationIdParam'
+        - $ref: '#/components/parameters/roleIdParam'
+        - $ref: '#/components/parameters/pageNumberParam'
+        - $ref: '#/components/parameters/pageSizeParam'
+      responses:
+        '200':
+          description: List of users with this role
+          headers:
+            link:
+              $ref: '#/components/headers/pagedLinkHeader'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoleUser'
+      security:
+        - access-token:
+            - read:role-users
+components:
+  parameters:
+    userIdParam:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for a user
+    groupIdParam:
+      name: groupId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for a group
+    organizationIdParam:
+      name: organizationId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the organization
+    identityProviderIdParam:
+      name: identityProviderId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for an identity provider
+    zoneIdParam:
+      name: zoneId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for a zone
+    credentialIdParam:
+      name: credentialId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for a credential
+    scheduleIdParam:
+      name: scheduleId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for a schedule
+    roleIdParam:
+      name: roleId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for a role
+    entryIdParam:
+      name: entryId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for an entry
+    pageNumberParam:
+      name: pageNumber
+      in: query
+      description: The requested page. This value is 1-indexed.
+      schema:
+        type: integer
+        format: int32
+        default: 1
+    pageSizeParam:
+      name: pageSize
+      in: query
+      description: The number of items in each page of data.
+      schema:
+        type: integer
+        format: int32
+        default: 50
+  headers:
+    pagedLinkHeader:
+      description: |-
+        Links for paging results. The following types of links may be provided:
+          - `first`: a link to the first page of results
+          - `prev`: a link to retrieve the previous page of results
+          - `next`: a link to retrieve the next page of results
+          - `last`: a link to retrieve the last page of results
+        Not all of these links will be provided by every API response, so consumers should not assume they will be present.
+      schema:
+        type: array
+        items:
+          type: string
+  securitySchemes:
+    access-token:
+      type: oauth2
+      description: Authentication for the Avigilon Alta Access API (actual method is access token)
+      flows:
+        authorizationCode:
+          authorizationUrl: https://api.openpath.com/auth/login
+          tokenUrl: https://api.openpath.com/auth/accessTokens
+          scopes:
+            read:users: Read access to user information
+            read:groups: Read access to group information
+            read:sites: Read access to site information
+            read:zones: Read access to zone information
+            read:user-roles: Read access to user role assignments
+            read:user-sites: Read access to user site associations
+            read:group-users: Read access to group user memberships
+            read:group-entries: Read access to group entries and permissions
+            read:entries: Read access to entry information
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the user
+        status:
+          type: string
+          enum:
+            - a
+            - s
+            - i
+          description: User's current status
+          x-enum-descriptions:
+            - Active - User account is active and can be used
+            - Suspended - User account has been suspended
+            - Inactive - User account is inactive
+        opal:
+          type: string
+          description: OPAL identifier for the user
+        identity:
+          $ref: '#/components/schemas/UserIdentity'
+        groups:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/UserGroup'
+          description: Groups the user belongs to
+        sites:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/UserSite'
+          description: Sites the user has access to
+        buildingFloorUnits:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/BuildingFloorUnit'
+          description: Building floor units associated with the user
+        hasRemoteUnlock:
+          type: boolean
+          description: Whether the user has remote unlock permissions
+        isOverrideAllowed:
+          type: boolean
+          description: Whether override is allowed for this user
+        startDate:
+          type: string
+          format: date
+          description: Access start date
+        endDate:
+          type: string
+          format: date
+          description: Access end date
+        startAndEndDateTimeZoneId:
+          type: string
+          description: Timezone for start/end dates
+        externalId:
+          type: string
+          description: External system identifier
+        personId:
+          type: string
+          description: Person identifier
+        title:
+          type: string
+          description: Job title
+        department:
+          type: string
+          description: Department
+        lastActivityAt:
+          type: string
+          format: date-time
+          description: Last activity timestamp
+        lastParcelReminderAt:
+          type: string
+          format: date-time
+          description: Last parcel reminder timestamp
+        manuallyInactivatedAt:
+          type: string
+          format: date-time
+          description: Manual inactivation timestamp
+        statusLastUpdatedAt:
+          type: string
+          format: date-time
+          description: Status last updated timestamp
+        userCustomFields:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/UserCustomField'
+          description: Custom field values for the user
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when user was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when user was last updated
+    UserInfo:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            organizationId:
+              type: string
+              description: Organization ID the user belongs to
+            avatarUrl:
+              type: string
+              format: url
+              description: URL to user's avatar image
+            lastLoginAt:
+              type: string
+              format: date-time
+              description: Timestamp of user's last login
+            permissions:
+              type: array
+              items:
+                type: string
+              description: List of user permissions
+            customFields:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/UserCustomField'
+              description: Custom field values for the user
+    Group:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the group
+        name:
+          type: string
+          description: Name of the group
+        description:
+          type: string
+          description: Description of the group
+        userCount:
+          type: integer
+          description: Number of users in the group
+        badgeConfig:
+          type: object
+          description: Badge configuration for the group
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when group was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when group was last updated
+    GroupSummary:
+      type: object
+      description: Summary representation of a group for nested contexts
+      properties:
+        id:
+          type: string
+          description: Group identifier
+        name:
+          type: string
+          description: Group name
+    GroupInfo:
+      allOf:
+        - $ref: '#/components/schemas/Group'
+        - type: object
+          properties:
+            organizationId:
+              type: string
+              description: Organization ID the group belongs to
+            parentGroupId:
+              type: string
+              description: Parent group ID if this is a child group
+            permissions:
+              type: array
+              items:
+                type: string
+              description: List of permissions assigned to the group
+            accessRules:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/AccessRule'
+              description: Access rules for the group
+            customFields:
+              type: object
+              additionalProperties:
+                type: string
+              description: Custom field values for the group
+    Role:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the role
+        name:
+          type: string
+          description: Name of the role
+        description:
+          type: string
+          description: Description of the role
+        permissions:
+          type: array
+          items:
+            type: string
+          description: List of permissions granted by this role
+        assignedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the role was assigned
+    Site:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the site
+        opal:
+          type: string
+          description: OPAL identifier for the site
+        name:
+          type: string
+          description: Name of the site
+        address:
+          type: string
+          description: Physical address of the site
+        address2:
+          type: string
+          description: Secondary address line
+        city:
+          type: string
+          description: City where the site is located
+        state:
+          type: string
+          description: State/province where the site is located
+        zip:
+          type: string
+          description: Postal/zip code of the site
+        country:
+          type: string
+          description: Country where the site is located
+        phone:
+          type: string
+          description: Phone number for the site
+        language:
+          type: string
+          description: Language setting for the site
+        zoneCount:
+          type: integer
+          description: Number of zones at the site
+        userCount:
+          type: integer
+          description: Number of users at the site
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when site was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when site was last updated
+    SiteSummary:
+      type: object
+      description: Summary representation of a site for nested contexts
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Site identifier
+        name:
+          type: string
+          description: Site name
+    AccessRule:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the access rule
+        name:
+          type: string
+          description: Name of the access rule
+        description:
+          type: string
+          description: Description of the access rule
+        conditions:
+          type: array
+          items:
+            type: string
+          description: Conditions that must be met for access
+        actions:
+          type: array
+          items:
+            type: string
+          description: Actions to take when rule is triggered
+    TimeRestriction:
+      type: object
+      properties:
+        startTime:
+          type: string
+          format: date-time
+          description: Start time for access
+        endTime:
+          type: string
+          format: date-time
+          description: End time for access
+        daysOfWeek:
+          type: array
+          items:
+            type: string
+            enum:
+              - monday
+              - tuesday
+              - wednesday
+              - thursday
+              - friday
+              - saturday
+              - sunday
+          description: Days of the week when access is allowed
+        validFrom:
+          type: string
+          format: date
+          description: Start date for the time restriction
+        validUntil:
+          type: string
+          format: date
+          description: End date for the time restriction
+    OrganizationRef:
+      type: object
+      description: Reference to an organization
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Organization identifier
+        name:
+          type: string
+          description: Organization name
+    NamespaceType:
+      type: object
+      description: Type information for namespace
+      required:
+        - id
+        - name
+        - modelName
+      properties:
+        id:
+          type: number
+          description: Namespace type identifier
+        name:
+          type: string
+          description: Namespace type name
+        modelName:
+          type: string
+          description: Namespace model name
+    IdentityNamespace:
+      type: object
+      description: Namespace information for user identity
+      properties:
+        id:
+          type: number
+          description: Namespace identifier
+        nickname:
+          type: string
+          description: Namespace nickname
+        namespaceType:
+          $ref: '#/components/schemas/NamespaceType'
+        org:
+          $ref: '#/components/schemas/OrganizationRef'
+    TokenScopeItem:
+      type: object
+      description: Token scope item with organization and permissions
+      properties:
+        org:
+          $ref: '#/components/schemas/OrganizationRef'
+        scope:
+          type: array
+          items:
+            type: string
+          description: Permissions in this scope
+    UserIdentity:
+      type: object
+      description: User identity information
+      required:
+        - id
+        - email
+      properties:
+        id:
+          type: string
+          description: Identity identifier
+        email:
+          type: string
+          format: email
+          description: User's email address
+        firstName:
+          type: string
+          description: User's first name
+        lastName:
+          type: string
+          description: User's last name
+        fullName:
+          type: string
+          description: User's full name
+        initials:
+          type: string
+          description: User's initials
+        opal:
+          type: string
+          description: OPAL identifier for this identity
+        phoneNumber:
+          type: string
+          description: User's phone number
+        mobilePhone:
+          type: string
+          description: User's mobile phone number
+        avatarUrl:
+          type: string
+          description: URL to user's avatar image
+        middleName:
+          type: string
+          description: User's middle name
+        suffix:
+          type: string
+          description: User's name suffix
+        preferredName:
+          type: string
+          description: User's preferred name
+        pronouns:
+          type: string
+          description: User's pronouns
+        dateOfBirth:
+          type: string
+          format: date
+          description: User's date of birth
+        emergencyContactName:
+          type: string
+          description: Emergency contact name
+        emergencyContactPhone:
+          type: string
+          description: Emergency contact phone
+        homeAddress:
+          type: string
+          description: User's home address
+        companyName:
+          type: string
+          description: User's company name
+        workAddress:
+          type: string
+          description: User's work address
+        isEmailVerified:
+          type: boolean
+          description: Whether the email has been verified
+        idpUniqueIdentifier:
+          type: string
+          description: Identity provider unique identifier
+        language:
+          type: string
+          description: User's language preference
+        nicknames:
+          type: array
+          items:
+            type: string
+          description: User's nicknames
+        needsPasswordChange:
+          type: boolean
+          description: Whether the user needs to change their password
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+        namespace:
+          $ref: '#/components/schemas/IdentityNamespace'
+    UserGroup:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Group identifier
+        name:
+          type: string
+          description: Group name
+        description:
+          type: string
+          description: Group description
+    UserSite:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Site identifier
+        name:
+          type: string
+          description: Site name
+        address:
+          type: string
+          description: Site address
+    BuildingFloorUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Building floor unit identifier
+        name:
+          type: string
+          description: Building floor unit name
+        buildingId:
+          type: string
+          description: Building identifier
+        floorId:
+          type: string
+          description: Floor identifier
+        unitNumber:
+          type: string
+          description: Unit number
+    UserCustomField:
+      type: object
+      required:
+        - id
+        - name
+        - value
+      properties:
+        id:
+          type: string
+          description: Custom field identifier
+        name:
+          type: string
+          description: Custom field name
+        value:
+          type: string
+          description: Custom field value
+        type:
+          type: string
+          description: Custom field type
+    Zone:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the zone
+        opal:
+          type: string
+          description: OPAL identifier for the zone
+        name:
+          type: string
+          description: Name of the zone
+        description:
+          type: string
+          description: Description of the zone
+        apbResetIcalText:
+          type: string
+          description: Anti-passback reset iCal text
+        apbExpirationSeconds:
+          type: integer
+          description: Anti-passback expiration in seconds
+        apbUseContactSensor:
+          type: boolean
+          description: Whether to use contact sensor for anti-passback
+        apbAllowSharedOrgReset:
+          type: boolean
+          description: Whether to allow shared organization reset for anti-passback
+        entryCount:
+          type: integer
+          description: Number of entries in the zone
+        offlineEntryCount:
+          type: integer
+          description: Number of offline entries in the zone
+        userCount:
+          type: integer
+          description: Number of users in the zone
+        groupCount:
+          type: integer
+          description: Number of groups in the zone
+        org:
+          $ref: '#/components/schemas/OrganizationRef'
+        site:
+          $ref: '#/components/schemas/ZoneSiteRef'
+        zoneShares:
+          type: array
+          items:
+            type: object
+          description: Zone shares array
+        entries:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/ZoneEntry'
+          description: Entries in the zone
+        apbAreas:
+          type: array
+          items:
+            type: object
+          description: Anti-passback areas
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when zone was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when zone was last updated
+    ZoneSiteRef:
+      type: object
+      description: Reference to a site within a zone
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Site identifier
+        name:
+          type: string
+          description: Site name
+    ZoneEntry:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Entry identifier
+        name:
+          type: string
+          description: Entry name
+        wirelessLock:
+          type: object
+          description: Wireless lock information
+        acu:
+          $ref: '#/components/schemas/ZoneEntryAcu'
+    ZoneEntryAcu:
+      type: object
+      description: ACU (Access Control Unit) associated with a zone entry
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: ACU identifier
+    TokenProperties:
+      type: object
+      properties:
+        organizationId:
+          type: string
+          description: Organization ID associated with the token
+        identityId:
+          type: string
+          description: Identity ID of the token holder
+        issuedAt:
+          type: string
+          format: date-time
+          description: Token issued timestamp
+        expiresAt:
+          type: string
+          format: date-time
+          description: Token expiration timestamp
+        scope:
+          type: array
+          items:
+            type: string
+          description: Permissions granted by this token
+        tokenType:
+          type: string
+          description: Type of the access token
+        jti:
+          type: string
+          description: JWT token identifier
+        iat:
+          type: integer
+          description: Issued at timestamp (Unix epoch)
+        exp:
+          type: integer
+          description: Expiration timestamp (Unix epoch)
+        tokenScopeList:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenScopeItem'
+          description: List of token scopes with organization context
+    Entry:
+      type: object
+      description: Physical entry point (door, gate, etc.) with access control
+      required:
+        - id
+        - name
+      properties:
+        opal:
+          type: string
+          description: OPAL identifier for the entry
+        id:
+          type: string
+          description: Unique identifier for the entry
+        name:
+          type: string
+          description: Name of the entry
+        pincode:
+          type: string
+          description: Entry pincode if enabled
+        isPincodeEnabled:
+          type: boolean
+          description: Whether pincode is enabled for this entry
+        color:
+          type: string
+          description: Color code for the entry
+        isMusterPoint:
+          type: boolean
+          description: Whether this entry is a muster point
+        notes:
+          type: string
+          description: Notes about the entry
+        externalUuid:
+          type: string
+          description: External UUID identifier
+        isReaderless:
+          type: boolean
+          description: Whether this is a readerless entry
+        isIntercomEntry:
+          type: boolean
+          description: Whether this is an intercom entry
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when entry was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when entry was last updated
+        zone:
+          $ref: '#/components/schemas/EntryZone'
+        acu:
+          $ref: '#/components/schemas/EntryAcu'
+        wirelessLock:
+          type: object
+          description: Wireless lock information
+        entryState:
+          $ref: '#/components/schemas/EntryState'
+        schedule:
+          $ref: '#/components/schemas/EntrySchedule'
+        cameras:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/EntryCamera'
+          description: Cameras associated with the entry
+    EntryZone:
+      type: object
+      description: Zone information associated with an entry
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Zone identifier
+        name:
+          type: string
+          description: Zone name
+        site:
+          $ref: '#/components/schemas/EntryZoneSite'
+    EntryZoneSite:
+      type: object
+      description: Site information associated with an entry zone
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Site identifier
+        name:
+          type: string
+          description: Site name
+    EntryAcu:
+      type: object
+      description: ACU (Access Control Unit) associated with an entry
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: ACU identifier
+        name:
+          type: string
+          description: ACU name
+        isGatewayMode:
+          type: boolean
+          description: Whether ACU is in gateway mode
+    EntryState:
+      type: object
+      description: State information for an entry
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Entry state identifier
+        name:
+          type: string
+          description: Entry state name
+    EntrySchedule:
+      type: object
+      description: Schedule information for an entry
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Schedule identifier
+        name:
+          type: string
+          description: Schedule name
+    EntryCamera:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Camera identifier
+        name:
+          type: string
+          description: Camera name
+        nameExt:
+          type: string
+          description: Extended camera name
+        idExt:
+          type: string
+          description: External camera identifier
+        supportsSnapshot:
+          type: boolean
+          description: Whether camera supports snapshots
+        supportsDeeplink:
+          type: boolean
+          description: Whether camera supports deep linking
+        supportsMotionSnapshot:
+          type: boolean
+          description: Whether camera supports motion snapshots
+        supportsFaceCrop:
+          type: boolean
+          description: Whether camera supports face cropping
+        supportsFaceDetection:
+          type: boolean
+          description: Whether camera supports face detection
+        supportsPeopleDetection:
+          type: boolean
+          description: Whether camera supports people detection
+        supportsMotionRecap:
+          type: boolean
+          description: Whether camera supports motion recap
+        supportsLivestream:
+          type: boolean
+          description: Whether camera supports live streaming
+        videoProviderId:
+          type: integer
+          description: Video provider identifier
+        videoProvider:
+          $ref: '#/components/schemas/VideoProvider'
+    VideoProvider:
+      type: object
+      description: Video provider information for camera integration
+      required:
+        - id
+        - videoProviderTypeId
+      properties:
+        id:
+          type: string
+          description: Video provider identifier
+        videoProviderTypeId:
+          type: string
+          description: Video provider type identifier
+    UserZone:
+      type: object
+      description: Zone information associated with a user
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Zone identifier
+        name:
+          type: string
+          description: Zone name
+    MfaCredential:
+      type: object
+      description: Multi-factor authentication credential for a user
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: MFA credential identifier
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when credential was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when credential was last updated
+        name:
+          type: string
+          description: Name of the MFA credential
+        status:
+          type: string
+          description: Status of the MFA credential
+        mfaCredentialType:
+          $ref: '#/components/schemas/MfaCredentialType'
+        totpSoftDevice:
+          $ref: '#/components/schemas/TotpSoftDevice'
+    MfaCredentialType:
+      type: object
+      description: Type of MFA credential
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: MFA credential type identifier
+        name:
+          type: string
+          description: Name of the credential type
+        modelName:
+          type: string
+          description: Model name of the credential type
+    TotpSoftDevice:
+      type: object
+      description: TOTP software device information
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: TOTP device identifier
+    UserPicture:
+      type: object
+      description: Picture/photo associated with a user
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Picture identifier
+        isAvatar:
+          type: boolean
+          description: Whether this picture is the user's avatar
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when picture was uploaded
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when picture was last updated
+        picture:
+          $ref: '#/components/schemas/PictureInfo'
+    PictureInfo:
+      type: object
+      description: Picture file information
+      properties:
+        contentType:
+          type: string
+          description: MIME type of the image
+        fileName:
+          type: string
+          description: Name of the picture file
+        url:
+          type: string
+          format: url
+          description: URL to the picture
+    UserEntry:
+      type: object
+      description: Entry/access permission associated with a user
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Entry identifier
+        name:
+          type: string
+          description: Entry name
+        wirelessLock:
+          $ref: '#/components/schemas/WirelessLock'
+        zone:
+          $ref: '#/components/schemas/UserEntryZone'
+    WirelessLock:
+      type: object
+      description: Wireless lock information
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Wireless lock identifier
+        noTourLockId:
+          type: integer
+          minimum: 0
+          maximum: 65534
+          description: NoTour lock identifier
+        isOffline:
+          type: boolean
+          description: Whether the wireless lock is offline
+        wirelessLockDbEntries:
+          type: array
+          items:
+            $ref: '#/components/schemas/WirelessLockDbEntry'
+          description: Database entries for the wireless lock
+    WirelessLockDbEntry:
+      type: object
+      properties:
+        credentialNumberHash:
+          type: string
+          description: Hashed credential number
+    UserEntryZone:
+      type: object
+      description: Zone information for a user entry
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Zone identifier
+        name:
+          type: string
+          description: Zone name
+        offlineEntryCount:
+          type: integer
+          description: Number of offline entries in the zone
+        site:
+          $ref: '#/components/schemas/ZoneSiteRef'
+    UserZoneUser:
+      type: object
+      description: Zone access configuration for a user
+      properties:
+        zone:
+          type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+              description: Zone identifier
+            name:
+              type: string
+              description: Zone name
+        schedule:
+          $ref: '#/components/schemas/Schedule'
+    UserCredential:
+      type: object
+      description: Credential assigned to a user
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Credential identifier
+        startDate:
+          type: string
+          format: date
+          description: Credential validity start date
+        endDate:
+          type: string
+          format: date
+          description: Credential validity end date
+        credentialType:
+          type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+              description: Credential type identifier
+            name:
+              type: string
+              description: Credential type name
+            modelName:
+              type: string
+              description: Credential type model name
+        mobile:
+          type: object
+          description: Mobile credential information
+          properties:
+            id:
+              type: string
+              description: Mobile credential identifier
+            name:
+              type: string
+              description: Mobile device name
+            provisionedAt:
+              type: string
+              format: date-time
+              description: Timestamp when mobile credential was provisioned
+        card:
+          type: object
+          description: Card credential information
+          properties:
+            id:
+              type: string
+              description: Card identifier
+            number:
+              type: string
+              description: Card number
+            facilityCode:
+              type: string
+              description: Card facility code
+            cardId:
+              type: string
+              description: Card ID
+        pincode:
+          type: object
+          description: PIN code credential information
+          properties:
+            id:
+              type: string
+              description: PIN code identifier
+            number:
+              type: string
+              description: PIN code number
+    UserActivityEvent:
+      type: object
+      description: Activity event for a user
+      required:
+        - time
+        - sourceName
+      properties:
+        time:
+          type: number
+          description: Unix timestamp of the event
+        timeIsoString:
+          type: string
+          format: date-time
+          description: ISO 8601 formatted timestamp
+        userId:
+          type: string
+          description: User identifier
+        userFirstName:
+          type: string
+          description: User's first name
+        userLastName:
+          type: string
+          description: User's last name
+        userName:
+          type: string
+          description: User's full name
+        userEmail:
+          type: string
+          format: email
+          description: User's email address
+        sourceName:
+          type: string
+          description: Source of the activity event
+        category:
+          type: string
+          description: Event category
+        subCategory:
+          type: string
+          description: Event sub-category
+        credentialSubtype:
+          type: string
+          description: Type of credential used
+        credentialTypeModelName:
+          type: string
+          description: Model name of credential type
+        credentialTypeName:
+          type: string
+          description: Name of credential type
+        credentialDetail:
+          type: string
+          description: Detailed credential information
+        entryId:
+          type: string
+          description: Entry identifier where event occurred
+        entryName:
+          type: string
+          description: Entry name where event occurred
+        zoneId:
+          type: string
+          description: Zone identifier where event occurred
+        zoneName:
+          type: string
+          description: Zone name where event occurred
+        siteId:
+          type: string
+          description: Site identifier where event occurred
+        siteName:
+          type: string
+          description: Site name where event occurred
+        requestType:
+          type: string
+          description: Type of access request
+        result:
+          type: string
+          description: Result of the access attempt
+        resultDescription:
+          type: string
+          description: Detailed description of the result
+        deniedReason:
+          type: string
+          description: Reason for access denial if applicable
+        location:
+          type: string
+          description: Location information for the event
+    CredentialType:
+      type: object
+      description: Type of credential that can be assigned to users
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Credential type identifier
+        name:
+          type: string
+          description: Credential type name
+        description:
+          type: string
+          description: Credential type description
+        modelName:
+          type: string
+          description: Model name of the credential type
+    EntryInfo:
+      allOf:
+        - $ref: '#/components/schemas/Entry'
+        - type: object
+          properties:
+            org:
+              $ref: '#/components/schemas/OrganizationRef'
+    EntryUser:
+      type: object
+      description: User with access to a specific entry
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: User identifier
+        status:
+          type: string
+          description: User status
+        identity:
+          type: object
+          properties:
+            id:
+              type: string
+              description: Identity identifier
+            firstName:
+              type: string
+              description: User's first name
+            middleName:
+              type: string
+              description: User's middle name
+            lastName:
+              type: string
+              description: User's last name
+            fullName:
+              type: string
+              description: User's full name
+            initials:
+              type: string
+              description: User's initials
+            email:
+              type: string
+              format: email
+              description: User's email address
+        sites:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserSite'
+          description: Sites the user has access to
+    EntryUserSchedule:
+      type: object
+      description: User with schedule information for entry access
+      properties:
+        user:
+          type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+              description: User identifier
+            status:
+              type: string
+              description: User status
+            identity:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: Identity identifier
+                firstName:
+                  type: string
+                  description: User's first name
+                middleName:
+                  type: string
+                  description: User's middle name
+                lastName:
+                  type: string
+                  description: User's last name
+                fullName:
+                  type: string
+                  description: User's full name
+                initials:
+                  type: string
+                  description: User's initials
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+            sites:
+              type: array
+              items:
+                $ref: '#/components/schemas/UserSite'
+              description: Sites the user has access to
+        schedules:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntrySchedule'
+          description: Schedules for entry access
+    EntryActivityEvent:
+      type: object
+      description: Activity event at an entry
+      required:
+        - time
+        - sourceName
+      properties:
+        time:
+          type: number
+          description: Unix timestamp of the event
+        timeIsoString:
+          type: string
+          format: date-time
+          description: ISO 8601 formatted timestamp
+        userId:
+          type: string
+          description: User identifier
+        userFirstName:
+          type: string
+          description: User's first name
+        userMiddleName:
+          type: string
+          description: User's middle name
+        userLastName:
+          type: string
+          description: User's last name
+        userName:
+          type: string
+          description: User's full name
+        userEmail:
+          type: string
+          format: email
+          description: User's email address
+        userMobilePhone:
+          type: string
+          description: User's mobile phone
+        userOrgId:
+          type: string
+          description: User's organization identifier
+        userOrgName:
+          type: string
+          description: User's organization name
+        userExternalId:
+          type: string
+          description: User's external identifier
+        userIdpName:
+          type: string
+          description: Identity provider name
+        userGroups:
+          type: array
+          items:
+            type: object
+            required:
+              - id
+            properties:
+              id:
+                type: string
+                description: Group identifier
+              name:
+                type: string
+                description: Group name
+          description: User's groups
+        userSites:
+          type: array
+          items:
+            type: object
+            required:
+              - id
+            properties:
+              id:
+                type: string
+                description: Site identifier
+              name:
+                type: string
+                description: Site name
+          description: User's sites
+        sourceName:
+          type: string
+          description: Source of the activity event
+        category:
+          type: string
+          description: Event category
+        subCategory:
+          type: string
+          description: Event sub-category
+        credentialSubtype:
+          type: string
+          description: Type of credential used
+        credentialTypeModelName:
+          type: string
+          description: Model name of credential type
+        credentialTypeName:
+          type: string
+          description: Name of credential type
+        credentialDetail:
+          type: string
+          description: Detailed credential information
+        entryId:
+          type: string
+          description: Entry identifier where event occurred
+        entryName:
+          type: string
+          description: Entry name where event occurred
+        zoneId:
+          type: string
+          description: Zone identifier where event occurred
+        zoneName:
+          type: string
+          description: Zone name where event occurred
+        siteId:
+          type: string
+          description: Site identifier where event occurred
+        siteName:
+          type: string
+          description: Site name where event occurred
+        requestType:
+          type: string
+          description: Type of access request
+        result:
+          type: string
+          description: Result of the access attempt
+        resultDescription:
+          type: string
+          description: Detailed description of the result
+        deniedReason:
+          type: string
+          description: Reason for access denial if applicable
+        location:
+          type: string
+          description: Location information for the event
+    EntryStateInfo:
+      type: object
+      description: Entry state configuration
+      required:
+        - id
+        - name
+        - code
+      properties:
+        id:
+          type: string
+          description: Entry state identifier
+        ordinal:
+          type: number
+          description: Sort order for the entry state
+        name:
+          type: string
+          description: Entry state name
+        code:
+          type: string
+          description: Entry state code
+        description:
+          type: string
+          description: Entry state description
+        isLocked:
+          type: boolean
+          description: Whether the entry is locked in this state
+        isToggle:
+          type: boolean
+          description: Whether this is a toggle state
+        orgId:
+          type: string
+          description: Organization identifier if org-specific
+        isMultiFactor:
+          type: boolean
+          description: Whether multi-factor authentication is required
+        triggerMethods:
+          type: array
+          items:
+            type: object
+          description: Available trigger methods for this state
+    GroupZone:
+      type: object
+      description: Zone associated with a group
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Zone identifier
+        name:
+          type: string
+          description: Zone name
+    GroupZoneGroup:
+      type: object
+      description: Zone with configuration details for a group
+      properties:
+        zone:
+          type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+              description: Zone identifier
+            name:
+              type: string
+              description: Zone name
+        schedule:
+          $ref: '#/components/schemas/Schedule'
+    AuthStrategyType:
+      type: object
+      description: Authentication strategy type
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Auth strategy type identifier
+        name:
+          type: string
+          description: Auth strategy type name
+        code:
+          type: string
+          description: Auth strategy type code
+    IdentityProviderType:
+      type: object
+      description: Type of identity provider
+      required:
+        - id
+        - name
+        - code
+      properties:
+        id:
+          type: string
+          description: Identity provider type identifier
+        name:
+          type: string
+          description: Identity provider type name
+        code:
+          type: string
+          description: Identity provider type code
+        featureCode:
+          type: string
+          description: Feature code for the identity provider type
+        supportsIdpInitiatedSso:
+          type: boolean
+          description: Whether IDP-initiated SSO is supported
+        authStrategyTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthStrategyType'
+          description: Authentication strategy types supported
+    IdentityProviderTypeInfo:
+      allOf:
+        - $ref: '#/components/schemas/IdentityProviderType'
+        - type: object
+          description: Detailed identity provider type information
+    IdentityProviderTypeSummary:
+      type: object
+      description: Summary of identity provider type for nested contexts
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+          description: Type identifier
+        name:
+          type: string
+          description: Type name
+        code:
+          type: string
+          description: Type code
+    IdentityProvider:
+      type: object
+      description: Identity provider configuration
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+          description: Identity provider identifier
+        orgId:
+          type: integer
+          description: Organization ID
+        identityProviderType:
+          $ref: '#/components/schemas/IdentityProviderTypeSummary'
+        isSyncUsersEnabled:
+          type: boolean
+          description: Whether user sync is enabled
+        isMobileCredentialEnabled:
+          type: boolean
+          description: Whether mobile credentials are enabled
+        isSsoEnabled:
+          type: boolean
+          description: Whether SSO is enabled
+        isMobileSsoEnabled:
+          type: boolean
+          description: Whether mobile SSO is enabled
+        lastSyncedAt:
+          type: string
+          format: date-time
+          description: Last sync timestamp
+        status:
+          type: string
+          description: Provider status
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    IdentityProviderGroup:
+      type: object
+      description: Identity provider group
+      properties:
+        idpGroupUniqueIdentifier:
+          type: string
+          description: Unique identifier from the identity provider
+        name:
+          type: string
+          description: Group name
+        description:
+          type: string
+          description: Group description
+        email:
+          type: string
+          format: email
+          description: Group email
+    IdentityProviderGroupRelation:
+      type: object
+      description: Mapping between identity provider groups and organization groups
+      properties:
+        idpGroupUniqueIdentifier:
+          type: string
+          description: Identity provider group identifier
+        identityProviderGroup:
+          $ref: '#/components/schemas/IdentityProviderGroup'
+        groupId:
+          type: integer
+          description: Organization group ID
+        group:
+          $ref: '#/components/schemas/GroupSummary'
+    OrgPicture:
+      type: object
+      description: Organization picture
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+          description: Picture identifier
+        isAvatar:
+          type: boolean
+          description: Whether this is an avatar image
+        picture:
+          $ref: '#/components/schemas/PictureInfo'
+        createdAt:
+          type: string
+          format: date-time
+          description: Upload timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    RoleInfo:
+      type: object
+      description: Role with detailed information
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Role identifier
+        name:
+          type: string
+          description: Role name
+        description:
+          type: string
+          description: Role description
+        isEditable:
+          type: boolean
+          description: Whether role can be edited
+        isSiteSpecific:
+          type: boolean
+          description: Whether role is site-specific
+        isMfaRequired:
+          type: boolean
+          description: Whether MFA is required for this role
+        userCount:
+          type: integer
+          description: Number of users with this role
+        sites:
+          type: array
+          items:
+            $ref: '#/components/schemas/SiteSummary'
+          description: Sites associated with the role
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    ZoneShare:
+      type: object
+      description: Zone share configuration
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Zone share identifier
+        zoneId:
+          type: string
+          description: Zone identifier
+        sharedWithOrgId:
+          type: string
+          description: Organization ID that the zone is shared with
+        sharedWithOrg:
+          type: object
+          properties:
+            id:
+              type: string
+              description: Shared organization identifier
+            name:
+              type: string
+              description: Shared organization name
+          description: Organization details
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    ZoneZoneUser:
+      type: object
+      description: Zone user access configuration
+      properties:
+        user:
+          type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+              description: User identifier
+            status:
+              type: string
+              description: User status
+            identity:
+              $ref: '#/components/schemas/UserIdentity'
+        schedule:
+          $ref: '#/components/schemas/Schedule'
+    CredentialActionType:
+      type: object
+      description: Type of credential action
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Credential action type identifier
+        name:
+          type: string
+          description: Credential action type name
+        code:
+          type: string
+          description: Credential action type code
+        description:
+          type: string
+          description: Credential action type description
+    OrgCredential:
+      type: object
+      description: Organization-level credential
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Credential identifier
+        userId:
+          type: string
+          description: User identifier this credential belongs to
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              description: User identifier
+            identity:
+              $ref: '#/components/schemas/UserIdentity'
+          description: User details
+        credentialType:
+          $ref: '#/components/schemas/CredentialType'
+        startDate:
+          type: string
+          format: date
+          description: Credential validity start date
+        endDate:
+          type: string
+          format: date
+          description: Credential validity end date
+        mobile:
+          type: object
+          description: Mobile credential information
+          properties:
+            id:
+              type: string
+              description: Mobile credential identifier
+            name:
+              type: string
+              description: Mobile device name
+            provisionedAt:
+              type: string
+              format: date-time
+              description: Provisioned timestamp
+        card:
+          type: object
+          description: Card credential information
+          properties:
+            id:
+              type: string
+              description: Card identifier
+            number:
+              type: string
+              description: Card number
+            facilityCode:
+              type: string
+              description: Card facility code
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    CredentialAction:
+      type: object
+      description: Action performed on a credential
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Credential action identifier
+        credentialId:
+          type: string
+          description: Credential identifier
+        credentialActionType:
+          $ref: '#/components/schemas/CredentialActionType'
+        performedBy:
+          type: object
+          properties:
+            id:
+              type: string
+              description: User identifier who performed the action
+            identity:
+              $ref: '#/components/schemas/UserIdentity'
+          description: User who performed the action
+        performedAt:
+          type: string
+          format: date-time
+          description: Timestamp when action was performed
+        details:
+          type: object
+          description: Additional action details
+    CardFormat:
+      type: object
+      description: Card format configuration
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Card format identifier
+        name:
+          type: string
+          description: Card format name
+        code:
+          type: string
+          description: Card format code
+        description:
+          type: string
+          description: Card format description
+        bitLength:
+          type: integer
+          description: Bit length of the card format
+        facilityCodeStart:
+          type: integer
+          description: Facility code start position
+        facilityCodeLength:
+          type: integer
+          description: Facility code length
+        cardNumberStart:
+          type: integer
+          description: Card number start position
+        cardNumberLength:
+          type: integer
+          description: Card number length
+    SharedUser:
+      type: object
+      description: User shared from another organization
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Shared user identifier
+        userId:
+          type: string
+          description: User identifier
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              description: User identifier
+            status:
+              type: string
+              description: User status
+            identity:
+              $ref: '#/components/schemas/UserIdentity'
+          description: User details
+        sharedFromOrgId:
+          type: string
+          description: Organization ID the user is shared from
+        sharedFromOrg:
+          type: object
+          properties:
+            id:
+              type: string
+              description: Source organization identifier
+            name:
+              type: string
+              description: Source organization name
+          description: Source organization details
+        sharedAt:
+          type: string
+          format: date-time
+          description: Timestamp when user was shared
+    OrgIdentity:
+      type: object
+      description: Organization identity
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Identity identifier
+        email:
+          type: string
+          format: email
+          description: Email address
+        firstName:
+          type: string
+          description: First name
+        lastName:
+          type: string
+          description: Last name
+        phoneNumber:
+          type: string
+          description: Phone number
+        avatarUrl:
+          type: string
+          format: url
+          description: Avatar URL
+        isVerified:
+          type: boolean
+          description: Whether identity is verified
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    AuditLogEntry:
+      type: object
+      description: Audit log entry
+      required:
+        - timestamp
+      properties:
+        timestamp:
+          type: number
+          description: Unix timestamp of the action
+        timestampIso:
+          type: string
+          format: date-time
+          description: ISO 8601 formatted timestamp
+        action:
+          type: string
+          description: Action performed
+        category:
+          type: string
+          description: Action category
+        actorId:
+          type: string
+          description: User ID who performed the action
+        actorName:
+          type: string
+          description: Name of user who performed the action
+        actorEmail:
+          type: string
+          format: email
+          description: Email of user who performed the action
+        targetId:
+          type: string
+          description: ID of the target resource
+        targetType:
+          type: string
+          description: Type of the target resource
+        targetName:
+          type: string
+          description: Name of the target resource
+        details:
+          type: object
+          description: Additional action details
+        ipAddress:
+          type: string
+          description: IP address of the actor
+        userAgent:
+          type: string
+          description: User agent string
+    ScheduleType:
+      type: object
+      description: Type of schedule
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Schedule type identifier
+        name:
+          type: string
+          description: Schedule type name
+        code:
+          type: string
+          description: Schedule type code
+        description:
+          type: string
+          description: Schedule type description
+    Schedule:
+      type: object
+      description: Schedule configuration
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Schedule identifier
+        name:
+          type: string
+          description: Schedule name
+        description:
+          type: string
+          description: Schedule description
+        scheduleType:
+          $ref: '#/components/schemas/ScheduleType'
+        isActive:
+          type: boolean
+          description: Whether schedule is active
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    ScheduleEvent:
+      type: object
+      description: Event in a schedule
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Event identifier
+        scheduleId:
+          type: string
+          description: Schedule identifier
+        startTime:
+          type: string
+          format: date-time
+          description: Event start time
+        endTime:
+          type: string
+          format: date-time
+          description: Event end time
+        daysOfWeek:
+          type: array
+          items:
+            type: string
+            enum:
+              - monday
+              - tuesday
+              - wednesday
+              - thursday
+              - friday
+              - saturday
+              - sunday
+          description: Days of the week for recurring events
+        isRecurring:
+          type: boolean
+          description: Whether event recurs
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    RoleUser:
+      type: object
+      description: User assigned to a role
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: User identifier
+        status:
+          type: string
+          description: User status
+        identity:
+          $ref: '#/components/schemas/UserIdentity'
+        assignedAt:
+          type: string
+          format: date-time
+          description: Timestamp when role was assigned to user
+    ConnectionProfile:
+      $ref: '#/components/schemas/connectionProfile'
+    ConnectionState:
+      $ref: '#/components/schemas/connectionState'
+    connectionProfile:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: The email address to use for authentication
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          description: The password to provide for authentication
+          example: c4uc4s14n
+        totpCode:
+          type: string
+          description: Time-based One-Time Password for MFA
+          example: '123123'
+      required:
+        - email
+        - password
+    baseConnectionState:
+      type: object
+      properties:
+        expiresIn:
+          type: number
+          format: int64
+          description: Number of seconds after which the access token becomes invalid
+          example: 3600
+    connectionState:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/baseConnectionState'
+        - type: object
+          properties:
+            accessToken:
+              description: The access token returned by the Auth client
+              type: string
+              format: password
+              example: MTQ0NjJkZmQ5OTM2NDE1ZTZjNGZmZjI3

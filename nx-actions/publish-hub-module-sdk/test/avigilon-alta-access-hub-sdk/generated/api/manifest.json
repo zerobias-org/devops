@@ -1,0 +1,65 @@
+{
+  "codegenVersion": "2.0.14",
+  "operations": {
+    "listAuditLogs": "AuditApi.listAuditLogs"
+    ,
+    "getTokenProperties": "AuthApi.getTokenProperties"
+    ,
+    "listCardFormats": "CredentialApi.listCardFormats",
+        "listCredentialActionTypes": "CredentialApi.listCredentialActionTypes",
+        "listCredentialActions": "CredentialApi.listCredentialActions",
+        "listCredentialTypes": "CredentialApi.listCredentialTypes",
+        "listOrgCredentials": "CredentialApi.listOrgCredentials"
+    ,
+    "getEntry": "EntryApi.get",
+        "listEntries": "EntryApi.list",
+        "listEntryActivity": "EntryApi.listActivity",
+        "listEntryCameras": "EntryApi.listCameras",
+        "listEntryStates": "EntryApi.listEntryStates",
+        "listEntryUserSchedules": "EntryApi.listUserSchedules",
+        "listEntryUsers": "EntryApi.listUsers"
+    ,
+    "getGroup": "GroupApi.get",
+        "listGroupEntries": "GroupApi.listEntries",
+        "listGroupUsers": "GroupApi.listUsers",
+        "listGroupZoneGroups": "GroupApi.listZoneGroups",
+        "listGroupZones": "GroupApi.listZones",
+        "listGroups": "GroupApi.list"
+    ,
+    "getIdentityProviderGroupRelations": "IdentityProviderApi.getIdentityProviderGroupRelations",
+        "getIdentityProviderType": "IdentityProviderApi.getIdentityProviderType",
+        "listIdentityProviderGroups": "IdentityProviderApi.listIdentityProviderGroups",
+        "listIdentityProviderTypes": "IdentityProviderApi.listIdentityProviderTypes",
+        "listIdentityProviders": "IdentityProviderApi.listIdentityProviders"
+    ,
+    "listRoleUsers": "RoleApi.listRoleUsers",
+        "listRoles": "RoleApi.listRoles"
+    ,
+    "listScheduleEvents": "ScheduleApi.listScheduleEvents",
+        "listScheduleTypes": "ScheduleApi.listScheduleTypes",
+        "listSchedules": "ScheduleApi.listSchedules"
+    ,
+    "listSites": "SiteApi.list"
+    ,
+    "getUser": "UserApi.get",
+        "listOrgIdentities": "UserApi.listOrgIdentities",
+        "listOrgPictures": "UserApi.listOrgPictures",
+        "listSharedUsers": "UserApi.listSharedUsers",
+        "listUserActivity": "UserApi.listActivity",
+        "listUserCredentials": "UserApi.listCredentials",
+        "listUserEntries": "UserApi.listEntries",
+        "listUserGroups": "UserApi.listGroups",
+        "listUserMfaCredentials": "UserApi.listMfaCredentials",
+        "listUserPictures": "UserApi.listPictures",
+        "listUserRoles": "UserApi.listRoles",
+        "listUserSites": "UserApi.listSites",
+        "listUserZoneUsers": "UserApi.listZoneUsers",
+        "listUserZones": "UserApi.listZones",
+        "listUsers": "UserApi.list"
+    ,
+    "listZoneShares": "ZoneApi.listZoneShares",
+        "listZoneZoneUsers": "ZoneApi.listZoneUsers",
+        "listZones": "ZoneApi.list"
+    
+  }
+}

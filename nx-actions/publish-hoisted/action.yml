@@ -150,6 +150,19 @@ runs:
         default_author: github_actions
         push: true
 
+    - name: Save package.json state before prepublish
+      run: |
+        echo "Saving package.json files before prepublish modifications..."
+        mkdir -p /tmp/package-json-backup
+        find . -name "package.json" -not -path "*/node_modules/*" -exec cp --parents {} /tmp/package-json-backup/ \;
+
+    - name: Prepare standalone packages
+      run: |
+        nx affected -t nx:prepublish --base=${{ steps.base_ref.outputs.BASE_REF }}
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
     - name: publish
       if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
       shell: bash
@@ -226,6 +239,11 @@ runs:
         rm -f "$FAIL_FILE"
 
         echo "packages published"
+
+    - name: Restore package.json state after publish
+      run: |
+        echo "Restoring package.json files to pre-prepublish state..."
+        cp -r /tmp/package-json-backup/./* .
 
     - name: Set action outputs
       id: set_outputs

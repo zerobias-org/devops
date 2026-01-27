@@ -3,8 +3,8 @@ description: 'Runs to publish a zerobias-org or zerobias-com hoisted mono repo'
 
 inputs:
   publishToken:
-    description: 'NPM token for publishing packages (defaults to NPM_TOKEN env var)'
-    required: false
+    description: 'NPM token for publishing packages'
+    required: true
 
 outputs:
   has_version_changes:
@@ -156,7 +156,7 @@ runs:
       if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
       shell: bash
       env:
-        PUBLISH_TOKEN: ${{ inputs.publishToken || env.NPM_TOKEN }}
+        PUBLISH_TOKEN: ${{ inputs.publishToken  }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |

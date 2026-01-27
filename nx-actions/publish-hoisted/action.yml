@@ -172,8 +172,6 @@ runs:
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
             echo "Publishing $pkg with latest tag"
-            # Generate npm-shrinkwrap.json in isolation (outside workspace context)
-            # Copy package to temp dir, install deps, create shrinkwrap, then publish
             TEMP_PUBLISH_DIR=$(mktemp -d)
             cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
             pushd "$TEMP_PUBLISH_DIR" > /dev/null

@@ -132,14 +132,8 @@ runs:
         FORCE_PUBLISH=$(echo "$CHANGED_NAMES" | tr '\n' ',' | sed 's/,$//')
         echo "Force publish list: $FORCE_PUBLISH"
 
-        # Check if any tags exist - first publish needs different handling
-        if git describe --tags --abbrev=0 --match="*" 2>/dev/null; then
-          echo "Existing tags found, using conventional-graduate"
-          npx lerna version --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
-        else
-          echo "No existing tags, using patch bump for initial publish"
-          npx lerna version patch --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --yes
-        fi
+        # Use patch bump for changed packages
+        npx lerna version patch --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --yes
 
         echo "HAS_VERSION_CHANGES=true" >> $GITHUB_OUTPUT
 

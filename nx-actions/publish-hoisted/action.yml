@@ -1,6 +1,11 @@
 name: 'Publish Hoisted'
 description: 'Runs to publish a zerobias-org or zerobias-com hoisted mono repo'
 
+inputs:
+  publishToken:
+    description: 'NPM token for publishing packages (defaults to NPM_TOKEN env var)'
+    required: false
+
 outputs:
   has_version_changes:
     description: 'Whether any packages were versioned and published'
@@ -151,7 +156,7 @@ runs:
       if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
       shell: bash
       env:
-        NPM_TOKEN: ${{ inputs.publishToken }}
+        PUBLISH_TOKEN: ${{ inputs.publishToken || env.NPM_TOKEN }}
         READ_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
@@ -160,6 +165,8 @@ runs:
         FAIL_FILE=$(mktemp)
         export PUBLISH_RESULTS_DIR
         export FAIL_FILE
+        export PUBLISH_TOKEN
+        export READ_TOKEN
 
         # Publish packages in parallel (4 at a time)
         echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
@@ -173,12 +180,14 @@ runs:
               TEMP_PUBLISH_DIR=$(mktemp -d)
               cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
               cd "$TEMP_PUBLISH_DIR"
+              # Copy .npmrc for registry auth
+              cp "$HOME/.npmrc" .npmrc 2>/dev/null || true
               # Install dependencies with read token (needs read:packages permission)
               NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts
               npm shrinkwrap
               echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
               # Publish with write token
-              NPM_TOKEN=$NPM_TOKEN timeout 120 npm publish --tag latest --access public
+              NPM_TOKEN=$PUBLISH_TOKEN timeout 120 npm publish --tag latest --access public
             ); then
               # Write published package info to individual temp file
               NAME=$(jq -r ".name" "$pkg/package.json")

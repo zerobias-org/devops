@@ -168,40 +168,37 @@ runs:
         export PUBLISH_TOKEN
         export READ_TOKEN
 
-        # Publish packages in parallel (4 at a time)
-        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
-        xargs -P4 -I{} bash -c '
-          pkg="{}"
+        # Publish packages sequentially
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
             echo "Publishing $pkg with latest tag"
             # Generate npm-shrinkwrap.json in isolation (outside workspace context)
             # Copy package to temp dir, install deps, create shrinkwrap, then publish
-            if (
-              TEMP_PUBLISH_DIR=$(mktemp -d)
-              cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
-              cd "$TEMP_PUBLISH_DIR"
-              # Copy .npmrc for registry auth
-              cp "$HOME/.npmrc" .npmrc 2>/dev/null || true
-              # Install dependencies with read token (needs read:packages permission)
-              NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts
-              npm shrinkwrap
-              echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
-              # Publish with write token (no --access flag, GitHub Packages uses repo visibility)
-              NPM_TOKEN=$PUBLISH_TOKEN timeout 120 npm publish --tag latest
-            ); then
-              # Write published package info to individual temp file
-              NAME=$(jq -r ".name" "$pkg/package.json")
-              VERSION=$(jq -r ".version" "$pkg/package.json")
-              LOCATION=$(realpath "$pkg")
-              # Use package name hash as filename to avoid collisions
+            TEMP_PUBLISH_DIR=$(mktemp -d)
+            cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
+            pushd "$TEMP_PUBLISH_DIR" > /dev/null
+            # Copy .npmrc for registry auth
+            cp "$HOME/.npmrc" .npmrc 2>/dev/null || true
+            # Install dependencies with read token (needs read:packages permission)
+            NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts
+            npm shrinkwrap
+            echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
+            # Publish with write token
+            if NPM_TOKEN=$PUBLISH_TOKEN timeout 120 npm publish --tag latest; then
+              # Write published package info
+              NAME=$(jq -r ".name" package.json)
+              VERSION=$(jq -r ".version" package.json)
+              LOCATION=$(realpath "$OLDPWD/$pkg")
               HASH=$(echo "$pkg" | md5sum | cut -d" " -f1)
               echo "{\"name\": \"$NAME\", \"version\": \"$VERSION\", \"location\": \"$LOCATION\"}" > "$PUBLISH_RESULTS_DIR/$HASH.json"
             else
               echo "::error::Failed to publish $pkg"
               echo "$pkg" >> "$FAIL_FILE"
             fi
+            popd > /dev/null
+            rm -rf "$TEMP_PUBLISH_DIR"
           fi
-        '
+        done
 
         # Merge all individual results into final JSON array
         echo "[]" > /tmp/published-packages.json

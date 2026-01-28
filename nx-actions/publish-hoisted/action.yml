@@ -171,16 +171,14 @@ runs:
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
             PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
-            # Check if nx:prepublish script exists in package.json
-            if jq -e ".scripts[\"nx:prepublish\"]" "$pkg/package.json" > /dev/null 2>&1; then
-              echo "Preparing $PROJECT_NAME (from $pkg) for standalone publish"
-              if ! timeout 120 nx nx:prepublish "$PROJECT_NAME"; then
-                echo "::error::Prepublish failed for $PROJECT_NAME"
-                exit 1
-              fi
-            else
-              echo "Skipping $PROJECT_NAME - no nx:prepublish target"
+            echo "Preparing $PROJECT_NAME (from $pkg) for standalone publish"
+            pushd "$pkg" > /dev/null
+            if ! timeout 120 npx prepublish-standalone; then
+              echo "::error::Prepublish failed for $PROJECT_NAME"
+              popd > /dev/null
+              exit 1
             fi
+            popd > /dev/null
           fi
         done
       env:
@@ -233,34 +231,26 @@ runs:
               fi
               popd > /dev/null
             else
-              # Default publish behavior - copy to temp dir and run npm publish
+              # Default publish behavior - use publish-hoisted script
               echo "Publishing $pkg with latest tag"
-              TEMP_PUBLISH_DIR=$(mktemp -d)
-              cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
-              pushd "$TEMP_PUBLISH_DIR" > /dev/null
-              # Copy .npmrc for registry auth
-              cp "$HOME/.npmrc" .npmrc 2>/dev/null || true
-              # Publish with write token
-              if NPM_TOKEN=$PUBLISH_TOKEN timeout 120 npm publish --tag latest; then
-                # Write published package info
-                NAME=$(jq -r ".name" package.json)
-                VERSION=$(jq -r ".version" package.json)
-                LOCATION=$(realpath "$OLDPWD/$pkg")
+              pushd "$pkg" > /dev/null
+              if PUBLISH_OUTPUT=$(NPM_TOKEN=$PUBLISH_TOKEN npx publish-hoisted --tag latest 2>&1); then
+                # Extract JSON from output (grep for marker prefix)
+                PUBLISH_JSON=$(echo "$PUBLISH_OUTPUT" | grep "^PUBLISH_RESULT:" | sed 's/^PUBLISH_RESULT://')
                 HASH=$(echo "$pkg" | md5sum | cut -d" " -f1)
-                echo "{\"name\": \"$NAME\", \"version\": \"$VERSION\", \"location\": \"$LOCATION\"}" > "$PUBLISH_RESULTS_DIR/$HASH.json"
+                echo "$PUBLISH_JSON" > "$PUBLISH_RESULTS_DIR/$HASH.json"
 
-                # Create tag immediately after successful publish to avoid inconsistent state
-                # Use git -C to run in repo root since we're in temp publish dir
-                TAG_NAME="${NAME}@${VERSION}"
+                # Create tag immediately after successful publish
+                TAG_NAME="${PROJECT_NAME}@${PROJECT_VERSION}"
                 echo "Creating tag: $TAG_NAME"
-                git -C "$REPO_ROOT" tag -f "$TAG_NAME" -m "Published $NAME version $VERSION"
+                git -C "$REPO_ROOT" tag -f "$TAG_NAME" -m "Published $PROJECT_NAME version $PROJECT_VERSION"
                 timeout 60 git -C "$REPO_ROOT" push origin "$TAG_NAME" --force || echo "Warning: Failed to push tag $TAG_NAME"
               else
+                echo "$PUBLISH_OUTPUT"
                 echo "::error::Failed to publish $pkg"
                 echo "$pkg" >> "$FAIL_FILE"
               fi
               popd > /dev/null
-              rm -rf "$TEMP_PUBLISH_DIR"
             fi
           fi
         done

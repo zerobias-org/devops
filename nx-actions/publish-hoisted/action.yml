@@ -123,7 +123,7 @@ runs:
         echo `git status`
 
         # Get changed package names for filtered lerna operations
-        CHANGED_NAMES=$(npx get-changed-package-names "${{ steps.detect_changes.outputs.BASE_REF }}")
+        CHANGED_NAMES=$(npx get-changed-package-names "${{ steps.detect_changes.outputs.BASE_REF }}" --hoisted)
         if [ -z "$CHANGED_NAMES" ]; then
           echo "No package names found, skipping version"
           echo "HAS_VERSION_CHANGES=false" >> $GITHUB_OUTPUT

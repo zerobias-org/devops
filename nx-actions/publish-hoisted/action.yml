@@ -5,6 +5,10 @@ inputs:
   publishToken:
     description: 'NPM token for publishing packages'
     required: true
+  pre-built:
+    description: 'Set to true if build was already run externally, skips build step'
+    required: false
+    default: 'false'
 
 outputs:
   has_version_changes:
@@ -21,17 +25,21 @@ runs:
   using: 'composite'
   steps:
     - name: Restore git cache
+      if: inputs.pre-built != 'true'
       uses: actions/cache@v4
       with:
         path: .git
         key: ${{ github.repository }}-git-folder
 
     - name: Checkout code
+      if: inputs.pre-built != 'true'
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - uses: zerobias-org/devops/nx-actions/setup-node@main
+    - name: Setup Node
+      if: inputs.pre-built != 'true'
+      uses: zerobias-org/devops/nx-actions/setup-node@main
 
     - name: configure git user
       shell: bash
@@ -40,6 +48,7 @@ runs:
         git config --global user.name "@$GITHUB_ACTOR"
 
     - name: Install nx
+      if: inputs.pre-built != 'true'
       shell: bash
       run: |
         npm install -g nx@22.4.2
@@ -48,6 +57,7 @@ runs:
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
     - name: Install dependencies
+      if: inputs.pre-built != 'true'
       shell: bash
       run: |
         cp .npmrc $HOME/.npmrc
@@ -88,7 +98,7 @@ runs:
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
     - name: Build changed packages
-      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true' && inputs.pre-built != 'true'
       shell: bash
       run: |
         # Build sequentially - nx handles its own parallelism and dependency ordering

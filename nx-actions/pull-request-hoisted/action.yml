@@ -1,21 +1,31 @@
 name: 'Pull Request Hoisted'
 description: 'Handle the Pull Request testing flow for zerobias-org or zerobias-com hoisted mono repo'
+
+inputs:
+  pre-built:
+    description: 'Set to true if build was already run externally, skips build step'
+    required: false
+    default: 'false'
+
 runs:
   using: "composite"
   steps:
     - name: Restore git cache
+      if: inputs.pre-built != 'true'
       uses: actions/cache@v4
       with:
         path: .git
         key: ${{ github.repository }}-git-folder
 
     - name: Checkout code
+      if: inputs.pre-built != 'true'
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ github.head_ref || github.ref_name }}
 
     - name: Setup node
+      if: inputs.pre-built != 'true'
       uses: zerobias-org/devops/actions/setup-node@main
 
     - name: Configure git user
@@ -25,6 +35,7 @@ runs:
         git config user.email github-actions@github.com
 
     - name: Install nx
+      if: inputs.pre-built != 'true'
       shell: bash
       run: |
         npm install -g nx@22.4.2
@@ -33,6 +44,7 @@ runs:
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
     - name: Install dependencies
+      if: inputs.pre-built != 'true'
       shell: bash
       run: |
         cp .npmrc $HOME/.npmrc
@@ -69,7 +81,7 @@ runs:
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
     - name: Build changed packages
-      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true' && inputs.pre-built != 'true'
       shell: bash
       run: |
         # Build sequentially - nx handles its own parallelism and dependency ordering

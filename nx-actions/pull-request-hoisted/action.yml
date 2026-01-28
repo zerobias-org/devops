@@ -50,14 +50,18 @@ runs:
         # Compare against origin/main to find all changes on this branch
         CHANGED_DIRS=$(npx detect-changes origin/main --hoisted)
         if [ -z "$CHANGED_DIRS" ]; then
-          echo "No packages changed, skipping build/publish"
+          echo "No packages changed, skipping build/test"
           echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
         else
-          echo "Changed packages:"
+          echo "Changed packages (unsorted):"
           echo "$CHANGED_DIRS"
           # Convert newlines to spaces for safe use in for loops
           CHANGED_DIRS_INLINE=$(echo "$CHANGED_DIRS" | tr '\n' ' ')
-          echo "CHANGED_DIRS=$CHANGED_DIRS_INLINE" >> $GITHUB_OUTPUT
+          # Sort by dependency order for correct build sequence
+          SORTED_DIRS=$(npx sort-by-deps $CHANGED_DIRS_INLINE)
+          echo "Sorted by dependencies:"
+          echo "$SORTED_DIRS"
+          echo "CHANGED_DIRS=$SORTED_DIRS" >> $GITHUB_OUTPUT
           echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
         fi
       env:

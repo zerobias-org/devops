@@ -62,6 +62,14 @@ runs:
       run: |
         cp .npmrc $HOME/.npmrc
         npm ci
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Install devops-tools
+      shell: bash
+      run: |
+        cp .npmrc $HOME/.npmrc 2>/dev/null || true
         npm install -g @zerobias-org/devops-tools@latest
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}

@@ -139,6 +139,19 @@ runs:
         # Use patch bump for changed packages
         npx lerna version patch --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --yes
 
+        # Detect ALL packages that lerna bumped (including dependency cascade)
+        # These are packages with modified package.json files
+        BUMPED_DIRS=$(git diff --name-only | grep 'package\.json$' | grep -v '^package\.json$' | grep -v 'package-lock\.json' | xargs -I {} dirname {} | sort -u | tr '\n' ' ')
+        if [ -n "$BUMPED_DIRS" ]; then
+          # Sort bumped packages by dependency order
+          SORTED_BUMPED=$(npx sort-by-deps $BUMPED_DIRS)
+          echo "Packages bumped by lerna (including dependents):"
+          echo "$SORTED_BUMPED"
+          echo "BUMPED_DIRS=$SORTED_BUMPED" >> $GITHUB_OUTPUT
+        else
+          echo "BUMPED_DIRS=${{ steps.detect_changes.outputs.CHANGED_DIRS }}" >> $GITHUB_OUTPUT
+        fi
+
         echo "HAS_VERSION_CHANGES=true" >> $GITHUB_OUTPUT
 
     - name: Commit version changes
@@ -156,7 +169,8 @@ runs:
       run: |
         echo "Saving package.json files before prepublish modifications..."
         mkdir -p /tmp/package-json-backup
-        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+        # Use BUMPED_DIRS to include all packages that will be published (including dependents)
+        for pkg in ${{ steps.version.outputs.BUMPED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
             mkdir -p "/tmp/package-json-backup/$pkg"
             cp "$pkg/package.json" "/tmp/package-json-backup/$pkg/package.json"
@@ -168,7 +182,8 @@ runs:
       if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
       shell: bash
       run: |
-        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+        # Use BUMPED_DIRS to prepare all packages that will be published
+        for pkg in ${{ steps.version.outputs.BUMPED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
             PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
             echo "Preparing $PROJECT_NAME (from $pkg) for standalone publish"
@@ -202,8 +217,8 @@ runs:
         export PUBLISH_TOKEN
         export READ_TOKEN
 
-        # Publish packages in dependency order (already sorted by detect_changes step)
-        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+        # Publish ALL bumped packages in dependency order (includes dependents from lerna cascade)
+        for pkg in ${{ steps.version.outputs.BUMPED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
             PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
             PROJECT_VERSION=$(jq -r ".version" "$pkg/package.json")
@@ -285,7 +300,8 @@ runs:
       shell: bash
       run: |
         echo "Restoring package.json files to pre-prepublish state..."
-        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+        # Restore all bumped packages (same set that was backed up)
+        for pkg in ${{ steps.version.outputs.BUMPED_DIRS }}; do
           if [ -f "/tmp/package-json-backup/$pkg/package.json" ]; then
             cp "/tmp/package-json-backup/$pkg/package.json" "$pkg/package.json"
             echo "Restored $pkg/package.json"

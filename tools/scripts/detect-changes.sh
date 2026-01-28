@@ -63,6 +63,20 @@ get_workspace_dirs() {
   fi
 }
 
+# Filter a list of directories to only include valid workspace packages
+# Usage: filter_to_workspace_packages "dir1 dir2 ..." or piped input
+filter_to_workspace_packages() {
+  local input="${1:-$(cat)}"
+  local workspace_dirs=$(get_workspace_dirs | sort -u)
+
+  for dir in $input; do
+    # Only include if it's in the workspace directories list
+    if echo "$workspace_dirs" | grep -qxF "$dir"; then
+      echo "$dir"
+    fi
+  done
+}
+
 # Get list of workspace package names (for filtering out internal deps)
 get_workspace_package_names() {
   for pkg_dir in $(get_workspace_dirs); do
@@ -251,7 +265,8 @@ if [ "$HOISTED_MODE" = true ]; then
   # Expand to include packages that depend on changed packages
   if [ -n "$INITIAL_CHANGED" ]; then
     EXPANDED=$(expand_with_dependents "$INITIAL_CHANGED")
-    echo "$EXPANDED" | tr ' ' '\n' | grep -v '^$' | sort -u
+    # Filter to only valid workspace packages (excludes root and non-workspace dirs)
+    echo "$EXPANDED" | tr ' ' '\n' | grep -v '^$' | filter_to_workspace_packages | sort -u
   fi
 
 else
@@ -281,6 +296,7 @@ else
   # Expand to include packages that depend on changed packages
   if [ -n "$INITIAL_CHANGED" ]; then
     EXPANDED=$(expand_with_dependents "$INITIAL_CHANGED")
-    echo "$EXPANDED" | tr ' ' '\n' | grep -v '^$' | sort -u
+    # Filter to only valid workspace packages (excludes root and non-workspace dirs)
+    echo "$EXPANDED" | tr ' ' '\n' | grep -v '^$' | filter_to_workspace_packages | sort -u
   fi
 fi

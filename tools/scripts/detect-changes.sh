@@ -46,12 +46,12 @@ fi
 get_workspace_dirs() {
   if [ -f "package.json" ]; then
     jq -r '.workspaces // [] | .[]' package.json 2>/dev/null | while read -r ws; do
-      # Remove glob patterns
-      ws_clean=$(echo "$ws" | sed 's/\/\*\*$//' | sed 's/\*\*//')
+      # Remove glob patterns (both /* and /**)
+      ws_clean=$(echo "$ws" | sed 's/\/\*\*$//' | sed 's/\/\*$//' | sed 's/\*\*//' | sed 's/\*$//')
       if [ -d "$ws_clean" ]; then
-        # If it's a glob pattern like "package/**", find all subdirs with package.json
-        if [[ "$ws" == *"**"* ]]; then
-          find "$ws_clean" -name "package.json" -not -path "*/node_modules/*" -exec dirname {} \; 2>/dev/null
+        # If it's a glob pattern (contains * or **), find subdirs with package.json
+        if [[ "$ws" == *"*"* ]]; then
+          find "$ws_clean" -maxdepth 2 -name "package.json" -not -path "*/node_modules/*" -exec dirname {} \; 2>/dev/null
         else
           # Direct workspace path
           if [ -f "$ws_clean/package.json" ]; then

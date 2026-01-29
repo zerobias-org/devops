@@ -140,7 +140,7 @@ runs:
         echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
         xargs -P4 -I{} bash -c '
           pkg="{}"
-          if [ -f "$pkg/package.json" ] && grep -q "\"prepublishtest\"" "$pkg/package.json"; then
+          if [ -f "$pkg/package.json" ]; then
             echo "Running prepublishtest for $pkg"
             (cd "$pkg" && timeout 300 npx prepublishtest)
           fi

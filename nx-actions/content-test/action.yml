@@ -127,9 +127,7 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        if npm run | grep -q "prepublish-init"; then
-          npm run prepublish-init
-        fi
+        npx prepublish-init
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
 
@@ -144,7 +142,7 @@ runs:
           pkg="{}"
           if [ -f "$pkg/package.json" ] && grep -q "\"prepublishtest\"" "$pkg/package.json"; then
             echo "Running prepublishtest for $pkg"
-            (cd "$pkg" && timeout 300 npm run prepublishtest)
+            (cd "$pkg" && timeout 300 npx prepublishtest)
           fi
         '
       env:

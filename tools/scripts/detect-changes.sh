@@ -237,28 +237,24 @@ if [ "$HOISTED_MODE" = true ]; then
     fi
 
     # For each workspace, check if it uses any of the changed deps
-    SCRIPT_DIR="$(dirname "$0")"
     for pkg_dir in $(get_workspace_dirs); do
       if [ ! -f "$pkg_dir/package.json" ]; then
         continue
       fi
 
-      if [ -f "$SCRIPT_DIR/prepublish-standalone.js" ]; then
-        PROJECT_DEPS=$(node "$SCRIPT_DIR/prepublish-standalone.js" "$pkg_dir" "." --dry-run 2>/dev/null | \
-          grep -E "^\s+[@a-zA-Z]" | \
-          sed 's/:.*//g' | \
-          tr -d ' ' || true)
+      # Use npx to run prepublish-standalone since devops-tools should be available
+      PROJECT_DEPS=$(npx prepublish-standalone "$pkg_dir" "." --dry-run 2>/dev/null | \
+        grep -E "^\s+[@a-zA-Z]" | \
+        sed 's/:.*//g' | \
+        tr -d ' ' || true)
 
-        if [ -n "$CHANGED_DEPS" ] && [ -n "$PROJECT_DEPS" ]; then
-          for dep in $CHANGED_DEPS; do
-            if echo "$PROJECT_DEPS" | grep -qF "$dep"; then
-              ALL_CHANGED_PKGS=$(printf "%s\n%s" "$ALL_CHANGED_PKGS" "$pkg_dir")
-              break
-            fi
-          done
-        fi
-      else
-        ALL_CHANGED_PKGS=$(printf "%s\n%s" "$ALL_CHANGED_PKGS" "$pkg_dir")
+      if [ -n "$CHANGED_DEPS" ] && [ -n "$PROJECT_DEPS" ]; then
+        for dep in $CHANGED_DEPS; do
+          if echo "$PROJECT_DEPS" | grep -qF "$dep"; then
+            ALL_CHANGED_PKGS=$(printf "%s\n%s" "$ALL_CHANGED_PKGS" "$pkg_dir")
+            break
+          fi
+        done
       fi
     done
   fi

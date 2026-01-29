@@ -163,6 +163,15 @@ const IGNORED_PACKAGES = new Set([
   'generated',// Generated code directory
 ]);
 
+// Known additional dependencies for specific packages
+// These are runtime dependencies required by generated code or downstream usage patterns
+// that aren't detected by import scanning (e.g., code generated from templates that import these)
+const PACKAGE_ADDITIONAL_DEPS = new Map([
+  // Generated API client code uses qs for URL parameter serialization
+  // The qs import is in codegen templates, so consumers need it at runtime
+  ['@zerobias-org/util-api-client-base', ['qs']],
+]);
+
 /**
  * Restore the original package.json from backup
  */
@@ -831,6 +840,16 @@ function main() {
   }
   if (implicitDeps.length > 0) {
     console.log(`\nAdded implicit dependencies based on package name: ${implicitDeps.join(', ')}`);
+  }
+
+  // Add known additional dependencies for specific packages
+  // These are dependencies required by generated code patterns that aren't detected by import scanning
+  const additionalDeps = PACKAGE_ADDITIONAL_DEPS.get(servicePackageJson.name);
+  if (additionalDeps && additionalDeps.length > 0) {
+    for (const dep of additionalDeps) {
+      requiredDeps.add(dep);
+    }
+    console.log(`\nAdded known additional dependencies for ${servicePackageJson.name}: ${additionalDeps.join(', ')}`);
   }
 
   // Expand workspace package dependencies transitively

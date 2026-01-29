@@ -63,7 +63,7 @@ get_workspace_dirs() {
   fi
 }
 
-# Filter a list of directories to only include valid workspace packages
+# Filter a list of directories to only include valid, publishable workspace packages
 # Usage: filter_to_workspace_packages "dir1 dir2 ..." or piped input
 filter_to_workspace_packages() {
   local input="${1:-$(cat)}"
@@ -72,6 +72,10 @@ filter_to_workspace_packages() {
   for dir in $input; do
     # Only include if it's in the workspace directories list
     if echo "$workspace_dirs" | grep -qxF "$dir"; then
+      # Skip private packages
+      if [ -f "$dir/package.json" ] && jq -e ".private == true" "$dir/package.json" > /dev/null 2>&1; then
+        continue
+      fi
       echo "$dir"
     fi
   done

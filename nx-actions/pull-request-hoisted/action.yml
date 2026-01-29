@@ -6,6 +6,50 @@ inputs:
     description: 'Set to true if build was already run externally, skips build step'
     required: false
     default: 'false'
+  pg-host:
+    description: 'PostgreSQL host (only needed with pre-built: true)'
+    required: false
+    default: ''
+  pg-port:
+    description: 'PostgreSQL port (only needed with pre-built: true)'
+    required: false
+    default: ''
+  pg-user:
+    description: 'PostgreSQL user (only needed with pre-built: true)'
+    required: false
+    default: ''
+  pg-password:
+    description: 'PostgreSQL password (only needed with pre-built: true)'
+    required: false
+    default: ''
+  pg-database:
+    description: 'PostgreSQL database (only needed with pre-built: true)'
+    required: false
+    default: ''
+  test-template-db:
+    description: 'Name of the template database for tests (only needed with pre-built: true)'
+    required: false
+    default: ''
+  aws-dynamo-db-table:
+    description: 'DynamoDB table name (only needed with pre-built: true)'
+    required: false
+    default: ''
+  aws-dynamo-db-region:
+    description: 'AWS region for DynamoDB (only needed with pre-built: true)'
+    required: false
+    default: ''
+  aws-dynamo-db-endpoint:
+    description: 'DynamoDB endpoint URL (only needed with pre-built: true)'
+    required: false
+    default: ''
+  aws-dynamo-db-access-key-id:
+    description: 'AWS access key ID for DynamoDB (only needed with pre-built: true)'
+    required: false
+    default: ''
+  aws-dynamo-db-secret-access-key:
+    description: 'AWS secret access key for DynamoDB (only needed with pre-built: true)'
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -156,6 +200,17 @@ runs:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
         JAVA_OPTS: "-Xms256m -Xmx1024m"
+        PGHOST: ${{ inputs.pg-host }}
+        PGPORT: ${{ inputs.pg-port }}
+        PGUSER: ${{ inputs.pg-user }}
+        PGPASSWORD: ${{ inputs.pg-password }}
+        PGDATABASE: ${{ inputs.pg-database }}
+        TEST_TEMPLATE_DB: ${{ inputs.test-template-db }}
+        AWS_DYNAMO_DB_TABLE: ${{ inputs.aws-dynamo-db-table }}
+        AWS_DYNAMO_DB_REGION: ${{ inputs.aws-dynamo-db-region }}
+        AWS_DYNAMO_DB_ENDPOINT: ${{ inputs.aws-dynamo-db-endpoint }}
+        AWS_DYNAMO_DB_ACCESS_KEY_ID: ${{ inputs.aws-dynamo-db-access-key-id }}
+        AWS_DYNAMO_DB_SECRET_ACCESS_KEY: ${{ inputs.aws-dynamo-db-secret-access-key }}
 
     - name: Slack Notification on failure
       uses: slackapi/slack-github-action@v2.1.1

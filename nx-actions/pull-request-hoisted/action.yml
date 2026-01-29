@@ -136,19 +136,34 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true' && inputs.pre-built != 'true'
       shell: bash
       run: |
+        # Function to get nx project name - tries project.json first, then directory basename
+        get_nx_project_name() {
+          local pkg_dir=$1
+          if [ -f "$pkg_dir/project.json" ]; then
+            jq -r ".name" "$pkg_dir/project.json"
+          else
+            basename "$pkg_dir"
+          fi
+        }
+
         # Build sequentially - nx handles its own parallelism and dependency ordering
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
-            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            PKG_NAME=$(jq -r ".name" "$pkg/package.json")
+            NX_NAME=$(get_nx_project_name "$pkg")
             # Check if nx:build script exists in package.json
             if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
-              echo "Building $PROJECT_NAME (from $pkg)"
-              if ! timeout 300 nx nx:build "$PROJECT_NAME"; then
-                echo "::error::Build failed for $PROJECT_NAME"
-                exit 1
+              echo "Building $PKG_NAME [nx project: $NX_NAME]"
+              if ! timeout 300 nx nx:build "$NX_NAME"; then
+                # Try with package.json name as fallback
+                echo "Trying with package name $PKG_NAME"
+                if ! timeout 300 nx nx:build "$PKG_NAME"; then
+                  echo "::error::Build failed for $PKG_NAME"
+                  exit 1
+                fi
               fi
             else
-              echo "Skipping $PROJECT_NAME - no nx:build target"
+              echo "Skipping $PKG_NAME - no nx:build target"
             fi
           fi
         done
@@ -162,31 +177,75 @@ runs:
       shell: bash
       run: |
         FAIL_FILE=$(mktemp)
+
+        # Function to get nx project name - tries project.json first, then directory basename
+        get_nx_project_name() {
+          local pkg_dir=$1
+          if [ -f "$pkg_dir/project.json" ]; then
+            jq -r ".name" "$pkg_dir/project.json"
+          else
+            basename "$pkg_dir"
+          fi
+        }
+        export -f get_nx_project_name
+
+        # Function to run nx test with fallback to alternate project name
+        run_nx_test() {
+          local target=$1
+          local pkg_dir=$2
+          local fail_file=$3
+
+          local pkg_name=$(jq -r ".name" "$pkg_dir/package.json")
+          local nx_name=$(get_nx_project_name "$pkg_dir")
+
+          echo "Testing $pkg_name ($target) [nx project: $nx_name]"
+
+          # Try with nx project name first
+          local output
+          output=$(timeout 300 nx "$target" "$nx_name" 2>&1)
+          local exit_code=$?
+
+          if [ $exit_code -eq 0 ]; then
+            echo "$output"
+            return 0
+          fi
+
+          # Check if it failed with "Cannot find project" - try package.json name as fallback
+          if echo "$output" | grep -q "Cannot find project"; then
+            echo "Project '$nx_name' not found in nx, trying '$pkg_name'"
+            if timeout 300 nx "$target" "$pkg_name"; then
+              return 0
+            else
+              echo "::error::$target failed for $pkg_name"
+              echo "$pkg_name:$target" >> "$fail_file"
+              return 1
+            fi
+          else
+            # Real test failure
+            echo "$output"
+            echo "::error::$target failed for $pkg_name"
+            echo "$pkg_name:$target" >> "$fail_file"
+            return 1
+          fi
+        }
+        export -f run_nx_test
+
         echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
         xargs -P4 -I{} bash -c '
           pkg="{}"
           if [ -f "$pkg/package.json" ]; then
-            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
             # Check if test:unit script exists in package.json
             if jq -e ".scripts[\"test:unit\"]" "$pkg/package.json" > /dev/null 2>&1; then
-              echo "Testing $PROJECT_NAME (unit tests)"
-              if ! timeout 300 nx test:unit "$PROJECT_NAME"; then
-                echo "::error::Unit tests failed for $PROJECT_NAME"
-                echo "$PROJECT_NAME:unit" >> '"$FAIL_FILE"'
-              fi
+              run_nx_test "test:unit" "$pkg" "'"$FAIL_FILE"'"
             else
-              echo "Skipping $PROJECT_NAME - no test:unit target"
+              echo "Skipping $(jq -r .name "$pkg/package.json") - no test:unit target"
             fi
 
             # Check if test:integration script exists in package.json
             if jq -e ".scripts[\"test:integration\"]" "$pkg/package.json" > /dev/null 2>&1; then
-              echo "Testing $PROJECT_NAME (integration tests)"
-              if ! timeout 300 nx test:integration "$PROJECT_NAME"; then
-                echo "::error::Integration tests failed for $PROJECT_NAME"
-                echo "$PROJECT_NAME:integration" >> '"$FAIL_FILE"'
-              fi
+              run_nx_test "test:integration" "$pkg" "'"$FAIL_FILE"'"
             else
-              echo "Skipping $PROJECT_NAME - no test:integration target"
+              echo "Skipping $(jq -r .name "$pkg/package.json") - no test:integration target"
             fi
           fi
         '

@@ -109,19 +109,34 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true' && inputs.pre-built != 'true'
       shell: bash
       run: |
+        # Function to get nx project name - tries project.json first, then directory basename
+        get_nx_project_name() {
+          local pkg_dir=$1
+          if [ -f "$pkg_dir/project.json" ]; then
+            jq -r ".name" "$pkg_dir/project.json"
+          else
+            basename "$pkg_dir"
+          fi
+        }
+
         # Build sequentially - nx handles its own parallelism and dependency ordering
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
-            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            PKG_NAME=$(jq -r ".name" "$pkg/package.json")
+            NX_NAME=$(get_nx_project_name "$pkg")
             # Check if nx:build script exists in package.json
             if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
-              echo "Building $PROJECT_NAME (from $pkg)"
-              if ! timeout 300 nx nx:build "$PROJECT_NAME"; then
-                echo "::error::Build failed for $PROJECT_NAME"
-                exit 1
+              echo "Building $PKG_NAME [nx project: $NX_NAME]"
+              if ! timeout 300 nx nx:build "$NX_NAME"; then
+                # Try with package.json name as fallback
+                echo "Trying with package name $PKG_NAME"
+                if ! timeout 300 nx nx:build "$PKG_NAME"; then
+                  echo "::error::Build failed for $PKG_NAME"
+                  exit 1
+                fi
               fi
             else
-              echo "Skipping $PROJECT_NAME - no nx:build target"
+              echo "Skipping $PKG_NAME - no nx:build target"
             fi
           fi
         done
@@ -226,6 +241,16 @@ runs:
         READ_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
       run: |
+        # Function to get nx project name - tries project.json first, then directory basename
+        get_nx_project_name() {
+          local pkg_dir=$1
+          if [ -f "$pkg_dir/project.json" ]; then
+            jq -r ".name" "$pkg_dir/project.json"
+          else
+            basename "$pkg_dir"
+          fi
+        }
+
         # Create temp directory for individual publish results
         PUBLISH_RESULTS_DIR=$(mktemp -d)
         FAIL_FILE=$(mktemp)
@@ -240,15 +265,16 @@ runs:
           if [ -f "$pkg/package.json" ]; then
             PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
             PROJECT_VERSION=$(jq -r ".version" "$pkg/package.json")
+            NX_NAME=$(get_nx_project_name "$pkg")
 
             # Check if package has custom nx:publish script
             if jq -e ".scripts[\"nx:publish\"]" "$pkg/package.json" > /dev/null 2>&1; then
-              echo "Publishing $PROJECT_NAME using custom nx:publish script"
+              echo "Publishing $PROJECT_NAME using custom nx:publish script [nx project: $NX_NAME]"
               pushd "$pkg" > /dev/null
               # Copy .npmrc for registry auth
               cp "$HOME/.npmrc" .npmrc 2>/dev/null || true
-              # Run custom publish script with write token
-              if NPM_TOKEN=$PUBLISH_TOKEN timeout 120 nx nx:publish "$PROJECT_NAME"; then
+              # Run custom publish script with write token - try nx name first, then package name
+              if NPM_TOKEN=$PUBLISH_TOKEN timeout 120 nx nx:publish "$NX_NAME" 2>/dev/null || NPM_TOKEN=$PUBLISH_TOKEN timeout 120 nx nx:publish "$PROJECT_NAME"; then
                 # Write published package info
                 HASH=$(echo "$pkg" | md5sum | cut -d" " -f1)
                 echo "{\"name\": \"$PROJECT_NAME\", \"version\": \"$PROJECT_VERSION\", \"location\": \"$(realpath .)\"}" > "$PUBLISH_RESULTS_DIR/$HASH.json"

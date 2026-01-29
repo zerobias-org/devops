@@ -141,9 +141,9 @@ expand_with_dependents() {
     # Find packages that depend on these
     local dependents=$(find_dependents "$changed_names")
 
-    # Add to our list
+    # Add to our list (convert spaces to newlines for proper dedup)
     if [ -n "$dependents" ]; then
-      all_changed=$(printf "%s\n%s" "$all_changed" "$dependents" | sort -u | tr '\n' ' ')
+      all_changed=$(printf "%s\n%s" "$(echo "$all_changed" | tr ' ' '\n')" "$dependents" | grep -v '^$' | sort -u | tr '\n' ' ')
     fi
 
     curr_count=$(echo "$all_changed" | wc -w)

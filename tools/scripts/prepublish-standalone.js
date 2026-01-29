@@ -316,6 +316,19 @@ function scanShellScripts(directory) {
         }
       }
 
+      // Match variable-based paths to packages like:
+      //   ${NODE_MODULES_DIR}/@zerobias-com/hydra-schema-principal
+      //   $NODE_MODULES_DIR/@zerobias-com/package-name
+      //   ${SOME_VAR}/@scope/package
+      // These are common in shell scripts that locate packages dynamically
+      const varPathRegex = /\$\{?[A-Z_]+\}?\/(@[a-z0-9][-a-z0-9]*\/[a-z0-9][-a-z0-9._]*)/gi;
+      while ((match = varPathRegex.exec(content)) !== null) {
+        const pkg = match[1].toLowerCase();
+        if (isValidPackageName(pkg)) {
+          packages.add(pkg);
+        }
+      }
+
       // Match npx @scope/package or npx package patterns
       // Must be followed by space, end of line, or path separator
       const npxRegex = /npx\s+(?:node\s+)?(?:\$[A-Z_]+\/)?(?:node_modules\/)?(@[a-z0-9][-a-z0-9]*\/[a-z0-9][-a-z0-9._]*|[a-z][a-z0-9-]*)/gi;

@@ -184,9 +184,29 @@ runs:
         # These are packages with modified package.json files
         BUMPED_DIRS=$(git diff --name-only | grep 'package\.json$' | grep -v '^package\.json$' | grep -v 'package-lock\.json' | xargs -I {} dirname {} | sort -u | tr '\n' ' ')
         if [ -n "$BUMPED_DIRS" ]; then
+          # Filter out private packages
+          FILTERED_BUMPED=""
+          for dir in $BUMPED_DIRS; do
+            if [ -f "$dir/package.json" ]; then
+              if jq -e ".private == true" "$dir/package.json" > /dev/null 2>&1; then
+                PKG_NAME=$(jq -r ".name" "$dir/package.json")
+                echo "Skipping $PKG_NAME - package is private"
+              else
+                FILTERED_BUMPED="$FILTERED_BUMPED $dir"
+              fi
+            fi
+          done
+          FILTERED_BUMPED=$(echo "$FILTERED_BUMPED" | xargs)  # trim whitespace
+
+          if [ -z "$FILTERED_BUMPED" ]; then
+            echo "No publishable packages bumped (all were private)"
+            echo "HAS_VERSION_CHANGES=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           # Sort bumped packages by dependency order
-          SORTED_BUMPED=$(npx sort-by-deps $BUMPED_DIRS)
-          echo "Packages bumped by lerna (including dependents):"
+          SORTED_BUMPED=$(npx sort-by-deps $FILTERED_BUMPED)
+          echo "Packages bumped by lerna (excluding private):"
           echo "$SORTED_BUMPED"
           echo "BUMPED_DIRS=$SORTED_BUMPED" >> $GITHUB_OUTPUT
         else

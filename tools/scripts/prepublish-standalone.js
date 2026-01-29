@@ -329,6 +329,19 @@ function scanShellScripts(directory) {
         }
       }
 
+      // Match standalone scoped package names in shell scripts
+      // These appear in variable assignments like:
+      //   SCHEMAS="@zerobias-com/hydra-schema-principal
+      //     @zerobias-com/hydra-schema-resource"
+      // Or inline like: for pkg in @scope/pkg1 @scope/pkg2; do
+      const scopedPkgRegex = /(?:^|[\s"'])(@[a-z0-9][-a-z0-9]*\/[a-z0-9][-a-z0-9._]*)(?:[\s"'\n]|$)/gim;
+      while ((match = scopedPkgRegex.exec(content)) !== null) {
+        const pkg = match[1].toLowerCase();
+        if (isValidPackageName(pkg)) {
+          packages.add(pkg);
+        }
+      }
+
       // Match npx @scope/package or npx package patterns
       // Must be followed by space, end of line, or path separator
       const npxRegex = /npx\s+(?:node\s+)?(?:\$[A-Z_]+\/)?(?:node_modules\/)?(@[a-z0-9][-a-z0-9]*\/[a-z0-9][-a-z0-9._]*|[a-z][a-z0-9-]*)/gi;

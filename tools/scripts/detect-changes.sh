@@ -51,7 +51,7 @@ get_workspace_dirs() {
       if [ -d "$ws_clean" ]; then
         # If it's a glob pattern (contains * or **), find subdirs with package.json
         if [[ "$ws" == *"*"* ]]; then
-          find "$ws_clean" -maxdepth 2 -name "package.json" -not -path "*/node_modules/*" -exec dirname {} \; 2>/dev/null
+          find "$ws_clean" -maxdepth 4 -name "package.json" -not -path "*/node_modules/*" -exec dirname {} \; 2>/dev/null
         else
           # Direct workspace path
           if [ -f "$ws_clean/package.json" ]; then

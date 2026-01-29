@@ -265,11 +265,12 @@ runs:
         PGPASSWORD: ${{ inputs.pg-password }}
         PGDATABASE: ${{ inputs.pg-database }}
         TEST_TEMPLATE_DB: ${{ inputs.test-template-db }}
-        AWS_DYNAMO_DB_TABLE: ${{ inputs.aws-dynamo-db-table }}
-        AWS_DYNAMO_DB_REGION: ${{ inputs.aws-dynamo-db-region }}
-        AWS_DYNAMO_DB_ENDPOINT: ${{ inputs.aws-dynamo-db-endpoint }}
-        AWS_DYNAMO_DB_ACCESS_KEY_ID: ${{ inputs.aws-dynamo-db-access-key-id }}
-        AWS_DYNAMO_DB_SECRET_ACCESS_KEY: ${{ inputs.aws-dynamo-db-secret-access-key }}
+        # DynamoDB config - use standard AWS SDK env var names that util-dynamodb expects
+        DYNAMO_DB_TABLE: ${{ inputs.aws-dynamo-db-table }}
+        AWS_REGION: ${{ inputs.aws-dynamo-db-region }}
+        AWS_ENDPOINT: ${{ inputs.aws-dynamo-db-endpoint }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws-dynamo-db-access-key-id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-dynamo-db-secret-access-key }}
 
     - name: Slack Notification on failure
       uses: slackapi/slack-github-action@v2.1.1

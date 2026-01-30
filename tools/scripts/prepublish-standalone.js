@@ -423,7 +423,9 @@ function scanImports(directory, extensions = ['.ts', '.js', '.mts', '.mjs']) {
       const content = fs.readFileSync(filePath, 'utf8');
 
       // Match ES6 imports: import ... from 'package' or import 'package'
-      const importRegex = /(?:import\s+(?:[\s\S]*?from\s+)?['"]([^'"]+)['"]|require\s*\(['"]([^'"]+)['"]\))/g;
+      // Note: Use [^\n]*? instead of [\s\S]*? to prevent matching across lines
+      // (bare imports like `import 'pkg';` were being skipped when followed by `import x from 'pkg2';`)
+      const importRegex = /(?:import\s+(?:[^\n]*?from\s+)?['"]([^'"]+)['"]|require\s*\(['"]([^'"]+)['"]\))/g;
 
       let match;
       while ((match = importRegex.exec(content)) !== null) {
@@ -518,7 +520,8 @@ function scanConfigFiles(directory) {
 
   function extractImports(content) {
     // Match ES6 imports and require statements
-    const importRegex = /(?:import\s+(?:[\s\S]*?from\s+)?['"]([^'"]+)['"]|require\s*\(['"]([^'"]+)['"]\))/g;
+    // Note: Use [^\n]*? instead of [\s\S]*? to prevent matching across lines
+    const importRegex = /(?:import\s+(?:[^\n]*?from\s+)?['"]([^'"]+)['"]|require\s*\(['"]([^'"]+)['"]\))/g;
 
     let match;
     while ((match = importRegex.exec(content)) !== null) {

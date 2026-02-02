@@ -22,6 +22,9 @@
     "nx:prepublish": "./scripts/prepublish-standalone.sh",
     "nx:publish": "./scripts/publish.sh"
   },
+  "zerobias": {
+    "import-artifact": "service"
+  },
   "bin": {
     "triggerSchemaDocs": "src/triggerSchemaDocs.js",
     "dereference-product-infos": "scripts/dereference-product-infos.sh",

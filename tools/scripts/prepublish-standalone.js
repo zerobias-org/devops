@@ -3,18 +3,21 @@
 /**
  * This script prepares a service for standalone publishing by:
  * 1. Scanning source files for actual import statements
- * 2. Scanning package.json scripts for build-time tool dependencies
- * 3. Adding only required dependencies (build, runtime, scripts) from root package.json
- * 4. Preserving the original package.json (backs it up first)
+ * 2. Adding only required runtime dependencies from root package.json
+ * 3. Preserving the original package.json (backs it up first)
  *
- * Usage: node prepublish-standalone.js <service-dir> <root-dir> [--dry-run] [--restore] [--library] [--target-dir=<dir>]
+ * By default, build tools (typescript, eslint, tsx, etc.) are NOT included in the
+ * published package since they are only needed during development/CI.
+ *
+ * Usage: node prepublish-standalone.js <service-dir> <root-dir> [--dry-run] [--restore] [--include-build-tools] [--target-dir=<dir>]
  *
  * Options:
- *   --dry-run         Show what would be done without making changes
- *   --restore         Restore the original package.json from backup
- *   --library         Skip build tool dependencies (for SDK/library packages)
- *   --target-dir=DIR  Write updated package.json to this directory instead of service dir
- *                     (useful for ng-packagr where dist/ has its own package.json)
+ *   --dry-run              Show what would be done without making changes
+ *   --restore              Restore the original package.json from backup
+ *   --include-build-tools  Include build tool dependencies (rarely needed)
+ *   --library              (deprecated) Same as default behavior, kept for compatibility
+ *   --target-dir=DIR       Write updated package.json to this directory instead of service dir
+ *                          (useful for ng-packagr where dist/ has its own package.json)
  */
 
 import fs from 'node:fs';
@@ -23,19 +26,20 @@ import path from 'node:path';
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const restore = args.includes('--restore');
-const libraryMode = args.includes('--library'); // Skip build tool deps for library packages
+const includeBuildTools = args.includes('--include-build-tools'); // Opt-in to include build tools
+const legacyLibraryFlag = args.includes('--library'); // Deprecated, kept for compatibility
 const targetDirArg = args.find(arg => arg.startsWith('--target-dir='));
 const targetDir = targetDirArg ? targetDirArg.split('=')[1] : null;
 const serviceDir = args.find(arg => !arg.startsWith('--'));
 const rootDir = args.find((arg, i) => !arg.startsWith('--') && i > args.indexOf(serviceDir));
 
 if (!serviceDir || !rootDir) {
-  console.error('Usage: node prepublish-standalone.js <service-dir> <root-dir> [--dry-run] [--restore] [--library] [--target-dir=<dir>]');
+  console.error('Usage: node prepublish-standalone.js <service-dir> <root-dir> [--dry-run] [--restore] [--include-build-tools] [--target-dir=<dir>]');
   console.error('\nOptions:');
-  console.error('  --dry-run         Show what would be done without making changes');
-  console.error('  --restore         Restore the original package.json from backup');
-  console.error('  --library         Skip build tool dependencies (for SDK/library packages)');
-  console.error('  --target-dir=DIR  Write updated package.json to DIR instead of service dir');
+  console.error('  --dry-run              Show what would be done without making changes');
+  console.error('  --restore              Restore the original package.json from backup');
+  console.error('  --include-build-tools  Include build tool dependencies (rarely needed)');
+  console.error('  --target-dir=DIR       Write updated package.json to DIR instead of service dir');
   process.exit(1);
 }
 
@@ -734,17 +738,18 @@ function main() {
     outputPackageJson = { ...servicePackageJson };
   }
 
-  // Auto-detect library mode based on zerobias.import-artifact field
-  // SDK packages should not include build tool dependencies
-  const isLibrary = libraryMode ||
-    servicePackageJson.zerobias?.['import-artifact'] === 'sdk' ||
-    servicePackageJson.zerobias?.['import-artifact'] === 'library';
+  // By default, skip build tools (build tools skipped) since they're rarely needed at runtime
+  // Only include build tools if explicitly requested via --include-build-tools flag
+  // or if package.json has zerobias.import-artifact === 'service'
+  const skipBuildTools = !includeBuildTools &&
+    servicePackageJson.zerobias?.['import-artifact'] !== 'service';
 
   console.log(`\n=== Preparing standalone package: ${servicePackageJson.name} ===`);
   console.log(`Service directory: ${serviceDir}`);
   console.log(`Root directory: ${rootDir}`);
   if (targetDir) console.log(`Target directory: ${targetDir}`);
-  if (isLibrary) console.log('** LIBRARY MODE - skipping build tool dependencies **');
+  if (skipBuildTools) console.log('** Skipping build tool dependencies (default) **');
+  if (includeBuildTools) console.log('** Including build tool dependencies (--include-build-tools) **');
   if (dryRun) console.log('** DRY RUN MODE **\n');
 
   // Scan for actual imports in source files
@@ -754,7 +759,7 @@ function main() {
 
   // Scan shell scripts for package references (skip for libraries - they're build-time only)
   let shellDeps = new Set();
-  if (!isLibrary) {
+  if (!skipBuildTools) {
     console.log('\nScanning shell scripts for package references...');
     shellDeps = scanShellScripts(serviceDir);
     console.log(`Found ${shellDeps.size} package references from shell scripts`);
@@ -762,12 +767,12 @@ function main() {
       console.log('  Shell script deps:', [...shellDeps].join(', '));
     }
   } else {
-    console.log('\nSkipping shell script scan (library mode)');
+    console.log('\nSkipping shell script scan (build tools skipped)');
   }
 
   // Extract dependencies from package.json scripts (skip for libraries - they're build-time only)
   let scriptDeps = new Set();
-  if (!isLibrary) {
+  if (!skipBuildTools) {
     // Build bin-to-package map from node_modules
     const binMap = getBinToPackageMap(rootDir);
 
@@ -778,7 +783,7 @@ function main() {
       console.log('  Build tools:', [...scriptDeps].join(', '));
     }
   } else {
-    console.log('Skipping script dependency scan (library mode)');
+    console.log('Skipping script dependency scan (build tools skipped)');
   }
 
   // Scan YAML files for package references (extends: directives, etc.)

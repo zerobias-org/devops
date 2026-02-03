@@ -7,47 +7,67 @@ inputs:
     required: false
     default: 'false'
   pg-host:
-    description: 'PostgreSQL host (only needed with pre-built: true)'
+    description: 'PostgreSQL host'
     required: false
     default: ''
   pg-port:
-    description: 'PostgreSQL port (only needed with pre-built: true)'
+    description: 'PostgreSQL port'
     required: false
     default: ''
   pg-user:
-    description: 'PostgreSQL user (only needed with pre-built: true)'
+    description: 'PostgreSQL user'
     required: false
     default: ''
   pg-password:
-    description: 'PostgreSQL password (only needed with pre-built: true)'
+    description: 'PostgreSQL password'
     required: false
     default: ''
   pg-database:
-    description: 'PostgreSQL database (only needed with pre-built: true)'
+    description: 'PostgreSQL database'
+    required: false
+    default: ''
+  pg-ssl-mode:
+    description: 'PostgreSQL SSL mode'
+    required: false
+    default: ''
+  pg-channel-binding:
+    description: 'PostgreSQL channel binding'
+    required: false
+    default: ''
+  su-user:
+    description: 'PostgreSQL SU user'
+    required: false
+    default: ''
+  su-password:
+    description: 'PostgreSQL SU password'
+    required: false
+    default: ''
+  su-db:
+    description: 'PostgreSQL SU database'
     required: false
     default: ''
   test-template-db:
-    description: 'Name of the template database for tests (only needed with pre-built: true)'
+    description: 'Name of the template database for tests'
     required: false
     default: ''
   aws-dynamo-db-table:
-    description: 'DynamoDB table name (only needed with pre-built: true)'
+    description: 'DynamoDB table name'
     required: false
     default: ''
   aws-dynamo-db-region:
-    description: 'AWS region for DynamoDB (only needed with pre-built: true)'
+    description: 'AWS region for DynamoDB'
     required: false
     default: ''
   aws-dynamo-db-endpoint:
-    description: 'DynamoDB endpoint URL (only needed with pre-built: true)'
+    description: 'DynamoDB endpoint URL'
     required: false
     default: ''
   aws-dynamo-db-access-key-id:
-    description: 'AWS access key ID for DynamoDB (only needed with pre-built: true)'
+    description: 'AWS access key ID for DynamoDB'
     required: false
     default: ''
   aws-dynamo-db-secret-access-key:
-    description: 'AWS secret access key for DynamoDB (only needed with pre-built: true)'
+    description: 'AWS secret access key for DynamoDB'
     required: false
     default: ''
 
@@ -226,6 +246,13 @@ runs:
         xargs -P4 -I{} bash -c '
           pkg="{}"
           if [ -f "$pkg/package.json" ]; then
+            # Check if test:pgtap script exists in package.json
+            if jq -e ".scripts[\"test:pgtap\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              run_nx_test "test:pgtap" "$pkg" "'"$FAIL_FILE"'"
+            else
+              echo "Skipping $(jq -r .name "$pkg/package.json") - no test:pgtap target"
+            fi
+
             # Check if test:unit script exists in package.json
             if jq -e ".scripts[\"test:unit\"]" "$pkg/package.json" > /dev/null 2>&1; then
               run_nx_test "test:unit" "$pkg" "'"$FAIL_FILE"'"
@@ -256,6 +283,11 @@ runs:
         PGUSER: ${{ inputs.pg-user }}
         PGPASSWORD: ${{ inputs.pg-password }}
         PGDATABASE: ${{ inputs.pg-database }}
+        PGSSLMODE: ${{ inputs.pg-ssl-mode }}
+        PGCHANNELBINDING: ${{ inputs.pg-channel-binding }}
+        SU_USER: ${{ inputs.su-user }}
+        SU_PASSWORD: ${{ inputs.su-password }}
+        SU_DB: ${{ inputs.su-db }}
         TEST_TEMPLATE_DB: ${{ inputs.test-template-db }}
         # DynamoDB config - use standard AWS SDK env var names that util-dynamodb expects
         DYNAMO_DB_TABLE: ${{ inputs.aws-dynamo-db-table }}

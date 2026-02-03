@@ -195,21 +195,30 @@ if [ "$HOISTED_MODE" = true ]; then
     INTERNAL_PKGS=$(get_workspace_package_names | tr '\n' '|' | sed 's/|$//')
 
     if [ -n "$LOCK_CHANGED" ]; then
+      # Only extract actual new package entries, not metadata changes
+      # Look for new package entries: lines like "node_modules/@scope/pkg": { or "node_modules/pkg": {
+      # These indicate new packages were added (version changes)
+      # Note: Uses temp file approach for compatibility across different shell environments
+      LOCK_DIFF_TMP=$(mktemp)
+      LOCK_PKGS_TMP=$(mktemp)
+      trap "rm -f $LOCK_DIFF_TMP $LOCK_PKGS_TMP" EXIT
+
       if [ "$UNCOMMITTED_MODE" = true ]; then
-        CHANGED_DEPS=$(git diff HEAD -- package-lock.json 2>/dev/null | \
-          grep -E '^\+\s*"[^"]+":' | \
-          grep -oE '"[^"]+":' | \
-          sed 's/"//g' | sed 's/://g' | \
-          grep -v "^version$\|^resolved$\|^integrity$\|^dev$\|^optional$\|^requires$\|^dependencies$\|^packages$\|^node_modules$" | \
-          sort -u || true)
+        git diff HEAD -- package-lock.json > "$LOCK_DIFF_TMP" 2>/dev/null || true
       else
-        CHANGED_DEPS=$(git diff "$BASE_REF" HEAD -- package-lock.json 2>/dev/null | \
-          grep -E '^\+\s*"[^"]+":' | \
-          grep -oE '"[^"]+":' | \
-          sed 's/"//g' | sed 's/://g' | \
-          grep -v "^version$\|^resolved$\|^integrity$\|^dev$\|^optional$\|^requires$\|^dependencies$\|^packages$\|^node_modules$" | \
-          sort -u || true)
+        git diff "$BASE_REF" HEAD -- package-lock.json > "$LOCK_DIFF_TMP" 2>/dev/null || true
       fi
+
+      # Extract new package entries (lines ending with ": {")
+      LC_ALL=C grep -E '^\+[[:space:]]*"node_modules/[^"]+": \{' "$LOCK_DIFF_TMP" > "$LOCK_PKGS_TMP" 2>/dev/null || true
+
+      # Extract package names: remove quotes and node_modules prefix, strip nested node_modules paths
+      CHANGED_DEPS=$(LC_ALL=C awk -F'"' '{print $2}' "$LOCK_PKGS_TMP" 2>/dev/null | \
+        LC_ALL=C sed 's|^node_modules/||' | \
+        LC_ALL=C sed 's|/node_modules/.*||' | \
+        sort -u || true)
+
+      rm -f "$LOCK_DIFF_TMP" "$LOCK_PKGS_TMP" 2>/dev/null || true
     fi
 
     if [ -n "$ROOT_PKG_CHANGED" ]; then
@@ -250,7 +259,8 @@ if [ "$HOISTED_MODE" = true ]; then
 
       if [ -n "$CHANGED_DEPS" ] && [ -n "$PROJECT_DEPS" ]; then
         for dep in $CHANGED_DEPS; do
-          if echo "$PROJECT_DEPS" | grep -qF "$dep"; then
+          # Use -qxF for exact line matching (not substring)
+          if echo "$PROJECT_DEPS" | grep -qxF "$dep"; then
             ALL_CHANGED_PKGS=$(printf "%s\n%s" "$ALL_CHANGED_PKGS" "$pkg_dir")
             break
           fi

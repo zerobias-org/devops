@@ -881,6 +881,11 @@ function main() {
       continue;
     }
 
+    // Skip self-reference (package should never depend on itself)
+    if (pkg === servicePackageJson.name) {
+      continue;
+    }
+
     // Check if it's a workspace package
     if (workspacePackages.has(pkg)) {
       newDependencies[pkg] = workspacePackages.get(pkg);

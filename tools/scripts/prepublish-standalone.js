@@ -426,37 +426,54 @@ function scanImports(directory, extensions = ['.ts', '.js', '.mts', '.mjs']) {
     try {
       const content = fs.readFileSync(filePath, 'utf8');
 
-      // Match ES6 imports: import ... from 'package' or import 'package'
-      // Note: Use [^\n]*? instead of [\s\S]*? to prevent matching across lines
-      // (bare imports like `import 'pkg';` were being skipped when followed by `import x from 'pkg2';`)
-      const importRegex = /(?:import\s+(?:[^\n]*?from\s+)?['"]([^'"]+)['"]|require\s*\(['"]([^'"]+)['"]\))/g;
+      // Use separate regexes to handle multi-line imports correctly:
+      // 1. Match 'from "package"' - works for both single and multi-line ES6 imports
+      // 2. Match bare 'import "package"' - side-effect imports
+      // 3. Match 'require("package")' - CommonJS
+      const fromRegex = /\bfrom\s+['"]([^'"]+)['"]/g;
+      const bareImportRegex = /\bimport\s+['"]([^'"]+)['"]/g;
+      const requireRegex = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
 
-      let match;
-      while ((match = importRegex.exec(content)) !== null) {
-        const importPath = match[1] || match[2];
-
+      function extractPackageName(importPath) {
         // Skip relative imports
         if (importPath.startsWith('.') || importPath.startsWith('/')) {
-          continue;
+          return null;
         }
 
         // Skip node: protocol imports
         if (importPath.startsWith('node:')) {
-          continue;
+          return null;
         }
 
         // Extract package name (handle scoped packages)
-        let packageName;
         if (importPath.startsWith('@')) {
           // Scoped package: @scope/package or @scope/package/subpath
           const parts = importPath.split('/');
-          packageName = parts.slice(0, 2).join('/');
+          return parts.slice(0, 2).join('/');
         } else {
           // Regular package: package or package/subpath
-          packageName = importPath.split('/')[0];
+          return importPath.split('/')[0];
         }
+      }
 
-        imports.add(packageName);
+      let match;
+
+      // Match ES6 imports with 'from' clause (handles multi-line imports)
+      while ((match = fromRegex.exec(content)) !== null) {
+        const packageName = extractPackageName(match[1]);
+        if (packageName) imports.add(packageName);
+      }
+
+      // Match bare/side-effect imports: import 'package'
+      while ((match = bareImportRegex.exec(content)) !== null) {
+        const packageName = extractPackageName(match[1]);
+        if (packageName) imports.add(packageName);
+      }
+
+      // Match CommonJS require statements
+      while ((match = requireRegex.exec(content)) !== null) {
+        const packageName = extractPackageName(match[1]);
+        if (packageName) imports.add(packageName);
       }
     } catch {
       // Ignore files that can't be read
@@ -523,29 +540,47 @@ function scanConfigFiles(directory) {
   ];
 
   function extractImports(content) {
-    // Match ES6 imports and require statements
-    // Note: Use [^\n]*? instead of [\s\S]*? to prevent matching across lines
-    const importRegex = /(?:import\s+(?:[^\n]*?from\s+)?['"]([^'"]+)['"]|require\s*\(['"]([^'"]+)['"]\))/g;
+    // Use separate regexes to handle multi-line imports correctly:
+    // 1. Match 'from "package"' - works for both single and multi-line ES6 imports
+    // 2. Match bare 'import "package"' - side-effect imports
+    // 3. Match 'require("package")' - CommonJS
+    const fromRegex = /\bfrom\s+['"]([^'"]+)['"]/g;
+    const bareImportRegex = /\bimport\s+['"]([^'"]+)['"]/g;
+    const requireRegex = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
 
-    let match;
-    while ((match = importRegex.exec(content)) !== null) {
-      const importPath = match[1] || match[2];
-
+    function extractPackageName(importPath) {
       // Skip relative imports and node: protocol
       if (importPath.startsWith('.') || importPath.startsWith('/') || importPath.startsWith('node:')) {
-        continue;
+        return null;
       }
 
       // Extract package name (handle scoped packages)
-      let packageName;
       if (importPath.startsWith('@')) {
         const parts = importPath.split('/');
-        packageName = parts.slice(0, 2).join('/');
+        return parts.slice(0, 2).join('/');
       } else {
-        packageName = importPath.split('/')[0];
+        return importPath.split('/')[0];
       }
+    }
 
-      imports.add(packageName);
+    let match;
+
+    // Match ES6 imports with 'from' clause (handles multi-line imports)
+    while ((match = fromRegex.exec(content)) !== null) {
+      const packageName = extractPackageName(match[1]);
+      if (packageName) imports.add(packageName);
+    }
+
+    // Match bare/side-effect imports: import 'package'
+    while ((match = bareImportRegex.exec(content)) !== null) {
+      const packageName = extractPackageName(match[1]);
+      if (packageName) imports.add(packageName);
+    }
+
+    // Match CommonJS require statements
+    while ((match = requireRegex.exec(content)) !== null) {
+      const packageName = extractPackageName(match[1]);
+      if (packageName) imports.add(packageName);
     }
   }
 

@@ -513,6 +513,34 @@ function scanImports(directory, extensions = ['.ts', '.js', '.mts', '.mjs']) {
   // Scan scripts directory for any Node.js scripts
   scanDirectory(path.join(directory, 'scripts'));
 
+  // Scan root-level JS/TS files that are in package.json files array
+  // This handles packages like login-sdk where metalsmith.js is the main entry point
+  try {
+    const pkgJsonPath = path.join(directory, 'package.json');
+    if (fs.existsSync(pkgJsonPath)) {
+      const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+      const filesArray = pkgJson.files || [];
+      for (const filePattern of filesArray) {
+        // Only process direct JS/TS files at root (not directories or globs)
+        if (extensions.some(ext => filePattern.endsWith(ext))) {
+          const filePath = path.join(directory, filePattern);
+          if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+            scanFile(filePath);
+          }
+        }
+      }
+      // Also scan main entry point if specified
+      if (pkgJson.main && extensions.some(ext => pkgJson.main.endsWith(ext))) {
+        const mainPath = path.join(directory, pkgJson.main);
+        if (fs.existsSync(mainPath) && fs.statSync(mainPath).isFile()) {
+          scanFile(mainPath);
+        }
+      }
+    }
+  } catch {
+    // Ignore errors reading package.json
+  }
+
   return imports;
 }
 

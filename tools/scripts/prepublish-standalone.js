@@ -792,10 +792,19 @@ function main() {
   const scannedImports = scanImports(serviceDir);
   console.log(`Found ${scannedImports.size} unique package imports from source files`);
 
-  // Scan shell scripts for package references (skip for libraries - they're build-time only)
+  // Scan shell scripts for package references
+  // Always scan if shell scripts are in the files array (they're runtime artifacts)
+  // Otherwise skip for libraries (build-time only)
+  const filesArray = servicePackageJson.files || [];
+  const hasShellFilesInPackage = filesArray.some(f =>
+    f.endsWith('.sh') || f === '*.sh' || f.includes('*.sh')
+  );
   let shellDeps = new Set();
-  if (!skipBuildTools) {
+  if (!skipBuildTools || hasShellFilesInPackage) {
     console.log('\nScanning shell scripts for package references...');
+    if (hasShellFilesInPackage) {
+      console.log('  (shell scripts are runtime artifacts in this package)');
+    }
     shellDeps = scanShellScripts(serviceDir);
     console.log(`Found ${shellDeps.size} package references from shell scripts`);
     if (shellDeps.size > 0) {

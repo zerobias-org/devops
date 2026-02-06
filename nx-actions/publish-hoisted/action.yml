@@ -177,8 +177,8 @@ runs:
         FORCE_PUBLISH=$(echo "$CHANGED_NAMES" | tr '\n' ',' | sed 's/,$//')
         echo "Force publish list: $FORCE_PUBLISH"
 
-        # Use patch bump for changed packages
-        npx lerna version patch --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --yes
+        # Use patch bump for changed packages with conventional commits for changelog generation
+        npx lerna version patch --conventional-commits --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --yes
 
         # Detect ALL packages that lerna bumped (including dependency cascade)
         # These are packages with modified package.json files

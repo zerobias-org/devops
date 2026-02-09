@@ -41,7 +41,6 @@ jobs:
 
   build-arm64:
     name: Build ARM64
-    if: inputs.build-arm64
     runs-on: zb-ubuntu-24.04-arm64
     outputs:
       version: ${{ steps.build.outputs.version }}

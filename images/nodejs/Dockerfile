@@ -16,3 +16,4 @@ RUN apk update && apk upgrade && \
     rm -rf /var/cache/apk/*
 
 RUN npm install npm --global --no-audit &>/dev/null
+

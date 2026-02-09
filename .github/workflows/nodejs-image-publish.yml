@@ -30,3 +30,4 @@ jobs:
           image-version: 22-alpine
           context-dir: images/nodejs
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          vault-url: ${{ secrets.VAULT_ADDR }}

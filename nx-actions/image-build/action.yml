@@ -1,0 +1,165 @@
+name: 'Image Build Action'
+description: 'Build and push a single-platform Docker image to GHCR and ECR'
+inputs:
+  image-name:
+    description: 'Name of the image to publish'
+    required: true
+  package-name:
+    description: 'NPM package name to pack (e.g., @zerobias-org/***)'
+    required: false
+  image-version:
+    description: 'Version of the package to build (use "latest" for latest)'
+    required: false
+    default: 'latest'
+  platform:
+    description: 'Target platform (linux/amd64 or linux/arm64)'
+    required: true
+  context-dir:
+    description: 'Folder containing the Dockerfile'
+    required: true
+  build-args:
+    description: 'Additional build args for the Dockerfile'
+    required: false
+    default: ''
+  image-secrets:
+    description: 'List of secrets to mount during build'
+    required: false
+    default: ''
+outputs:
+  version:
+    description: 'The resolved version that was built'
+    value: ${{ steps.getVersion.outputs.version }}
+  platform-tag:
+    description: 'The platform suffix (amd64 or arm64)'
+    value: ${{ steps.platform.outputs.tag }}
+runs:
+  using: "composite"
+  steps:
+    - name: Determine platform tag
+      id: platform
+      shell: bash
+      run: |
+        if [ "${{ inputs.platform }}" = "linux/amd64" ]; then
+          echo "tag=amd64" >> $GITHUB_OUTPUT
+        elif [ "${{ inputs.platform }}" = "linux/arm64" ]; then
+          echo "tag=arm64" >> $GITHUB_OUTPUT
+        else
+          echo "Unknown platform: ${{ inputs.platform }}"
+          exit 1
+        fi
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: '.nvmrc'
+
+    - name: Import Secrets
+      uses: hashicorp/vault-action@v3.0.0
+      with:
+        method: jwt
+        url: https://vault.auditmation.io:8200
+        role: publishing-role
+        path: gh-actions
+        secrets: |
+          operations-kv/data/ci/github username | USERNAME ;
+          operations-kv/data/ci/github readPackagesToken | READ_TOKEN ;
+          operations-kv/data/ci/github writePackagesToken | WRITE_TOKEN ;
+          operations-kv/data/ci/github zb-token | ZB_TOKEN ;
+          operations-kv/data/ci/slack devopsNotifications | SLACK_DEVOPS_NOTIFICATIONS ;
+
+    - name: Install Docker (Binary)
+      shell: bash
+      run: |
+        if ! command -v docker &> /dev/null; then
+          ARCH=$(uname -m)
+          [[ "$ARCH" == "aarch64" ]] && ARCH="aarch64" || ARCH="x86_64"
+          curl -fsSL "https://download.docker.com/linux/static/stable/${ARCH}/docker-27.3.1.tgz" -o docker.tgz
+          sudo tar xzf docker.tgz -C /usr/local/bin --strip-components=1
+          rm docker.tgz
+          sudo dockerd &
+          sleep 5
+          sudo chmod 666 /var/run/docker.sock
+        fi
+        docker version
+
+    - name: Pack and extract package
+      if: inputs.package-name != ''
+      id: getVersion
+      shell: bash
+      working-directory: ${{ inputs.context-dir }}
+      run: |
+        npm pack ${{ inputs.package-name }}@${{ inputs.image-version }}
+        VERSION=$(npm show ${{ inputs.package-name }}@${{ inputs.image-version }} version)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+        # Extract package name for tarball (convert @scope/name to scope-name)
+        TARBALL_NAME=$(echo "${{ inputs.package-name }}" | sed 's/@//g' | sed 's/\//-/g')
+        tar -xzf ${TARBALL_NAME}-${VERSION}.tgz
+        rm ${TARBALL_NAME}-${VERSION}.tgz
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ env.USERNAME }}
+        password: ${{ env.WRITE_TOKEN }}
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::961260934100:role/github-actions-publishing-role
+        role-session-name: ${{ github.event.repository.name }}
+        aws-region: us-east-1
+
+    - name: Login to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Create ECR Repository
+      shell: bash
+      run: |
+        aws ecr create-repository \
+          --repository-name ${{ inputs.image-name }} \
+          --image-scanning-configuration scanOnPush=true \
+          || echo "Repository already exists"
+        aws ecr set-repository-policy --repository-name ${{ inputs.image-name }} \
+          --policy-text '{ "Version": "2012-10-17", "Statement": [ { "Sid": "ReadonlyAccess", "Effect": "Allow", "Principal": { "AWS": "*" }, "Action": [ "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:DescribeImageScanFindings", "ecr:DescribeImages", "ecr:DescribeRepositories", "ecr:GetAuthorizationToken", "ecr:GetDownloadUrlForLayer", "ecr:GetRepositoryPolicy", "ecr:ListImages" ], "Condition": { "StringLike": { "aws:PrincipalOrgID": "o-dppyp34ws8" } } } ] }'
+
+    - name: Build and push image
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ inputs.context-dir }}
+        file: ${{ inputs.context-dir }}/Dockerfile
+        platforms: ${{ inputs.platform }}
+        push: true
+        provenance: false
+        build-args: |
+          npm_token=${{ env.READ_TOKEN }}
+          zb_token=${{ env.ZB_TOKEN }}
+          ${{ inputs.build-args }}
+        secrets: ${{ inputs.image-secrets }}
+        tags: |
+          ghcr.io/zerobias-org/${{ inputs.image-name }}:${{ steps.getVersion.outputs.version }}-${{ steps.platform.outputs.tag }}
+          961260934100.dkr.ecr.us-east-1.amazonaws.com/${{ inputs.image-name }}:${{ steps.getVersion.outputs.version }}-${{ steps.platform.outputs.tag }}
+
+    - name: Slack Notification on failure
+      uses: slackapi/slack-github-action@v2.0.0
+      if: failure()
+      with:
+        webhook: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
+        webhook-type: incoming-webhook
+        payload: |
+          {
+            "text": ":fire: ${{ inputs.image-name }} (${{ steps.platform.outputs.tag }}) image build failed",
+            "attachments": [
+              {
+                "color": "danger",
+                "text": "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>"
+              }
+            ]
+          }

@@ -1,0 +1,77 @@
+name: NodeJS Image Publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/nodejs-image-publish.yml
+      - images/nodejs/**
+
+defaults:
+  run:
+    working-directory: images/nodejs/
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+jobs:
+  build-amd64:
+    name: Build AMD64
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build AMD64 image
+        id: build
+        uses: zerobias-org/devops/nx-actions/image-build@main
+        with:
+          image-name: devops-nodejs-image
+          image-version: 22-alpine
+          context-dir: images/nodejs
+          platform: linux/amd64
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+  build-arm64:
+    name: Build ARM64
+    if: inputs.build-arm64
+    runs-on: zb-ubuntu-24.04-arm64
+    outputs:
+      version: ${{ steps.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ARM64 image
+        id: build
+        uses: zerobias-org/devops/nx-actions/image-build@main
+        with:
+          image-name: devops-nodejs-image
+          image-version: 22-alpine
+          context-dir: images/nodejs
+          platform: linux/arm64
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+  create-manifest:
+    name: Create Manifest
+    needs: [build-arm64, build-amd64]
+    if: always() && needs.build-amd64.result == 'success'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Create multi-arch manifest
+        uses: zerobias-org/devops/nx-actions/image-manifest@main
+        with:
+          image-name: devops-nodejs-image
+          image-version: 22-alpine
+          platforms: ${{ inputs.build-arm64 && needs.build-arm64.result == 'success' && 'amd64,arm64' || 'amd64' }}
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          ZB_TOKEN: ${{ env.ZB_TOKEN }}

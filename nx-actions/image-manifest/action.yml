@@ -1,0 +1,116 @@
+name: 'Image Manifest Action'
+description: 'Create and push multi-arch Docker manifests to GHCR and ECR'
+inputs:
+  image-name:
+    description: 'Name of the image'
+    required: true
+  image-version:
+    description: 'Version of the image'
+    required: true
+  platforms:
+    description: 'Comma-separated list of platforms to include (e.g., "amd64,arm64" or "amd64")'
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Import Secrets
+      uses: hashicorp/vault-action@v3.0.0
+      with:
+        method: jwt
+        url: https://vault.auditmation.io:8200
+        role: publishing-role
+        path: gh-actions
+        secrets: |
+          operations-kv/data/ci/github username | USERNAME ;
+          operations-kv/data/ci/github writePackagesToken | WRITE_TOKEN ;
+          operations-kv/data/ci/slack releasesWebhook | SLACK_RELEASES_WEBHOOK ;
+          operations-kv/data/ci/slack devopsNotifications | SLACK_DEVOPS_NOTIFICATIONS ;
+
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ env.USERNAME }}
+        password: ${{ env.WRITE_TOKEN }}
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::961260934100:role/github-actions-publishing-role
+        role-session-name: ${{ github.event.repository.name }}
+        aws-region: us-east-1
+
+    - name: Login to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Create and push manifests
+      shell: bash
+      run: |
+        IMAGE_NAME="${{ inputs.image-name }}"
+        VERSION="${{ inputs.image-version }}"
+        PLATFORMS="${{ inputs.platforms }}"
+
+        GHCR_REGISTRY="ghcr.io/zerobias-org"
+        ECR_REGISTRY="961260934100.dkr.ecr.us-east-1.amazonaws.com"
+
+        # Build the list of platform-specific images
+        GHCR_IMAGES=""
+        ECR_IMAGES=""
+
+        IFS=',' read -ra PLATFORM_ARRAY <<< "$PLATFORMS"
+        for platform in "${PLATFORM_ARRAY[@]}"; do
+          platform=$(echo "$platform" | xargs)  # trim whitespace
+          GHCR_IMAGES="$GHCR_IMAGES $GHCR_REGISTRY/$IMAGE_NAME:$VERSION-$platform"
+          ECR_IMAGES="$ECR_IMAGES $ECR_REGISTRY/$IMAGE_NAME:$VERSION-$platform"
+        done
+
+        echo "Creating manifests for platforms: $PLATFORMS"
+        echo "GHCR images: $GHCR_IMAGES"
+        echo "ECR images: $ECR_IMAGES"
+
+        # Create and push GHCR manifests
+        echo "Creating GHCR versioned manifest..."
+        docker manifest create $GHCR_REGISTRY/$IMAGE_NAME:$VERSION $GHCR_IMAGES
+
+        echo "Creating GHCR latest manifest..."
+        docker manifest create $GHCR_REGISTRY/$IMAGE_NAME:latest $GHCR_IMAGES
+
+        echo "Pushing GHCR manifests..."
+        docker manifest push $GHCR_REGISTRY/$IMAGE_NAME:$VERSION
+        docker manifest push $GHCR_REGISTRY/$IMAGE_NAME:latest
+
+        # Create and push ECR manifests
+        echo "Creating ECR versioned manifest..."
+        docker manifest create $ECR_REGISTRY/$IMAGE_NAME:$VERSION $ECR_IMAGES
+
+        echo "Creating ECR latest manifest..."
+        docker manifest create $ECR_REGISTRY/$IMAGE_NAME:latest $ECR_IMAGES
+
+        echo "Pushing ECR manifests..."
+        docker manifest push $ECR_REGISTRY/$IMAGE_NAME:$VERSION
+        docker manifest push $ECR_REGISTRY/$IMAGE_NAME:latest
+
+        echo "Manifests created and pushed successfully!"
+
+    - name: Slack Notification on success
+      uses: rtCamp/action-slack-notify@master
+      if: success()
+      env:
+        SLACK_COLOR: good
+        SLACK_WEBHOOK: ${{ env.SLACK_RELEASES_WEBHOOK }}
+        SLACK_ICON_EMOJI: ':robot:'
+        MSG_MINIMAL: 'true'
+        SLACK_TITLE: ':gear: new ${{ inputs.image-name }} image published :tada:'
+        SLACK_MESSAGE: '${{ inputs.image-name }}:${{ inputs.image-version }} (platforms: ${{ inputs.platforms }})'
+        SLACK_FOOTER: ''
+
+    - name: Slack Notification on failure
+      uses: rtCamp/action-slack-notify@master
+      if: failure()
+      env:
+        SLACK_WEBHOOK: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
+        SLACK_ICON_EMOJI: ":fire:"
+        MSG_MINIMAL: 'true'
+        SLACK_TITLE: ":fire: ${{ inputs.image-name }} manifest creation failed"
+        SLACK_MESSAGE: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        SLACK_COLOR: danger

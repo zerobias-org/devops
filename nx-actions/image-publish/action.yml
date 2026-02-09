@@ -29,9 +29,6 @@ inputs:
     description: 'Publish to the public ecr repository'
     required: false
     default: 'false'
-  vault-url:
-    description: 'Vault server URL'
-    required: true
 outputs:
   random-number:
     description: "Random number"
@@ -43,7 +40,7 @@ runs:
       uses: hashicorp/vault-action@v3.4.0
       with:
         method: jwt
-        url: ${{ inputs.vault-url }}
+        url: ${{ secrets.VAULT_ADDR }}
         path: gh-actions
         role: publishing-role
         secrets: |

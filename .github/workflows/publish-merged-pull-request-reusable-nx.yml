@@ -7,10 +7,10 @@ on:
         required: false
         default: 'true'
         type: string
-  test-timeout:
-    description: 'Timeout in seconds for test commands'
-    required: false
-    default: '300'
+      test-timeout:
+        description: 'Timeout in seconds for test commands'
+        required: false
+        default: '300'
 
 env:
   PGHOST: localhost

@@ -75,7 +75,7 @@ jobs:
         uses: zerobias-org/devops/actions/content-test@main
         with:
           run-integration-tests: ${{ inputs.run-integration-tests }}
-          test-timeout: ${{ inputs.test_timeout }}
+          test-timeout: ${{ inputs.test-timeout }}
 
   publish-pre-release:
     runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]

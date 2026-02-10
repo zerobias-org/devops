@@ -76,7 +76,7 @@ jobs:
         uses: zerobias-org/devops/actions/content-test-fork@main
         with:
           run-integration-tests: ${{ inputs.run-integration-tests }}
-          test-timeout: ${{ inputs.test_timeout }}
+          test-timeout: ${{ inputs.test-timeout }}
 
       # - name: Slack Notification
       #   uses: rtCamp/action-slack-notify@master

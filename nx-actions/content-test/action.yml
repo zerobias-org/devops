@@ -5,6 +5,10 @@ inputs:
     description: 'Set to true to run the integrationTest.sh script'
     required: false
     default: 'true'
+  test-timeout:
+    description: 'Timeout in seconds for test commands'
+    required: false
+    default: '300'
 
 runs:
   using: "composite"
@@ -142,7 +146,7 @@ runs:
           pkg="{}"
           if [ -f "$pkg/package.json" ]; then
             echo "Running prepublishtest for $pkg"
-            (cd "$pkg" && timeout 300 npx prepublishtest)
+            (cd "$pkg" && timeout ${{ inputs.test-timeout }} npx prepublishtest)
           fi
         '
       env:

@@ -70,6 +70,10 @@ inputs:
     description: 'AWS secret access key for DynamoDB'
     required: false
     default: ''
+  test-timeout:
+    description: 'Test timeout in seconds for nx test commands'
+    required: false
+    default: '300'
 
 runs:
   using: "composite"
@@ -166,10 +170,10 @@ runs:
             # Check if nx:build script exists in package.json
             if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
               echo "Building $PKG_NAME [nx project: $NX_NAME]"
-              if ! timeout 300 nx nx:build "$NX_NAME"; then
+              if ! timeout ${{ inputs.test-timeout }} nx nx:build "$NX_NAME"; then
                 # Try with package.json name as fallback
                 echo "Trying with package name $PKG_NAME"
-                if ! timeout 300 nx nx:build "$PKG_NAME"; then
+                if ! timeout ${{ inputs.test-timeout }} nx nx:build "$PKG_NAME"; then
                   echo "::error::Build failed for $PKG_NAME"
                   exit 1
                 fi
@@ -214,7 +218,7 @@ runs:
 
           # Try with nx project name first
           local output
-          output=$(timeout 300 nx "$target" "$nx_name" 2>&1)
+          output=$(timeout ${{ inputs.test-timeout }} nx "$target" "$nx_name" 2>&1)
           local exit_code=$?
 
           if [ $exit_code -eq 0 ]; then
@@ -225,7 +229,7 @@ runs:
           # Check if it failed with "Cannot find project" - try package.json name as fallback
           if echo "$output" | grep -q "Cannot find project"; then
             echo "Project '$nx_name' not found in nx, trying '$pkg_name'"
-            if timeout 300 nx "$target" "$pkg_name"; then
+            if timeout ${{ inputs.test-timeout }} nx "$target" "$pkg_name"; then
               return 0
             else
               echo "::error::$target failed for $pkg_name"

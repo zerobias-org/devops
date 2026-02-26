@@ -480,7 +480,7 @@ function scanImports(directory, extensions = ['.ts', '.js', '.mts', '.mjs']) {
     }
   }
 
-  function scanDirectory(dir) {
+  function scanDirectory(dir, skipDirs = []) {
     if (!fs.existsSync(dir)) return;
 
     try {
@@ -488,13 +488,13 @@ function scanImports(directory, extensions = ['.ts', '.js', '.mts', '.mjs']) {
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
 
-        // Skip node_modules and common non-source directories
-        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === '.git') {
+        // Skip specified directories
+        if (skipDirs.includes(entry.name)) {
           continue;
         }
 
         if (entry.isDirectory()) {
-          scanDirectory(fullPath);
+          scanDirectory(fullPath, skipDirs);
         } else if (entry.isFile() && extensions.some(ext => entry.name.endsWith(ext))) {
           scanFile(fullPath);
         }
@@ -504,14 +504,10 @@ function scanImports(directory, extensions = ['.ts', '.js', '.mts', '.mjs']) {
     }
   }
 
-  // Scan src directory
-  scanDirectory(path.join(directory, 'src'));
-
-  // Also scan generated directory if it exists
-  scanDirectory(path.join(directory, 'generated'));
-
-  // Scan scripts directory for any Node.js scripts
-  scanDirectory(path.join(directory, 'scripts'));
+  // Scan the entire package directory for source files
+  // Skip node_modules, dist, generated, and other non-source directories
+  const skipDirs = ['node_modules', 'dist', 'generated', '.git', 'coverage', 'test', 'tests', '__tests__'];
+  scanDirectory(directory, skipDirs);
 
   // Scan root-level JS/TS files that are in package.json files array
   // This handles packages like login-sdk where metalsmith.js is the main entry point

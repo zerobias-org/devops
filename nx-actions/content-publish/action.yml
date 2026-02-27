@@ -142,6 +142,28 @@ runs:
     #     ZB_TOKEN: ${{ env.ZB_TOKEN }}
     #     JAVA_OPTS: "-Xms256m -Xmx1024m"
 
+    - name: prepublish init
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        if [ -x scripts/prepublish-init.sh ]; then
+          bash scripts/prepublish-init.sh
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: prepublish
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        if npm run 2>/dev/null | grep -q "nx:prepublish"; then
+          npm run nx:prepublish
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
     - name: version
       id: version
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'

@@ -99,6 +99,42 @@ jobs:
         with:
           publishToken: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check for scripts/cdnUpdate.sh
+        id: cdnUpdateExists
+        run: |
+          if [ -x scripts/cdnUpdate.sh ]; then
+            echo "cdnUpdateExists=true"
+            echo "cdnUpdateExists=true" >> $GITHUB_OUTPUT
+          else
+            echo "cdnUpdateExists=false"
+            echo "cdnUpdateExists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        with:
+          hugo-version: '0.110.0'
+          extended: true
+
+      - name: configure aws tools creds
+        uses: aws-actions/configure-aws-credentials@v2
+        if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        with:
+          role-to-assume: ${{ env.AWS_PUBLISHING_ROLE }}
+          role-session-name: ${{ github.event.repository.name }}
+          aws-region: ${{ env.AWS_PUBLISHING_REGION }}
+
+      - name: CDN Update
+        if: ${{ steps.cdnUpdateExists.outputs.cdnUpdateExists == 'true' }}
+        run: |
+          if [ -x scripts/cdnUpdate.sh ]; then
+            ./scripts/cdnUpdate.sh
+          fi
+        env:
+          NPM_TOKEN: ${{ env.READ_TOKEN }}
+          SINCE: HEAD~2
+
       - name: Dispatch sdk-publish event
         if: ${{ inputs.dispatch-sdk-publish && steps.publish.outputs.has_version_changes == 'true' }}
         run: |

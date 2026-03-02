@@ -220,15 +220,16 @@ runs:
           pkg="{}"
           if [ -f "$pkg/package.json" ]; then
             echo "Publishing $pkg with latest tag"
-            # Generate package-lock.json in isolation (outside workspace context)
-            # Copy package to temp dir, install deps, then publish with lock file
+            # Generate npm-shrinkwrap.json in isolation (outside workspace context)
+            # Copy package to temp dir, install deps, create shrinkwrap, then publish
             if (
               TEMP_PUBLISH_DIR=$(mktemp -d)
               cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
               cd "$TEMP_PUBLISH_DIR"
               # Install dependencies with read token (needs read:packages permission)
               NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts
-              echo "Generated package-lock.json for $(jq -r .name package.json)"
+              npm shrinkwrap
+              echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
               # Publish with write token
               NPM_TOKEN=$NPM_TOKEN timeout 120 npm publish --tag latest
             ); then

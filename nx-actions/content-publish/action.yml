@@ -224,10 +224,10 @@ runs:
             # Copy package to temp dir, install deps, create shrinkwrap, then publish
             if (
               TEMP_PUBLISH_DIR=$(mktemp -d)
-              cp -r "$pkg"/* "$TEMP_PUBLISH_DIR/"
+              cp -r "$pkg"/* "$pkg"/.[!.]* "$TEMP_PUBLISH_DIR/" 2>/dev/null || true
               cd "$TEMP_PUBLISH_DIR"
               # Install dependencies with read token (needs read:packages permission)
-              NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts
+              NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts --include=optional
               npm shrinkwrap
               echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
               # Publish with write token

@@ -506,7 +506,7 @@ function scanImports(directory, extensions = ['.ts', '.js', '.mts', '.mjs']) {
 
   // Scan the entire package directory for source files
   // Skip node_modules, dist, generated, and other non-source directories
-  const skipDirs = ['node_modules', 'dist', 'generated', '.git', 'coverage', 'test', 'tests', '__tests__'];
+  const skipDirs = ['node_modules', 'dist', '.git', 'coverage', 'test', 'tests', '__tests__'];
   scanDirectory(directory, skipDirs);
 
   // Scan root-level JS/TS files that are in package.json files array

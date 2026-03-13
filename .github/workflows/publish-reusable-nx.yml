@@ -133,7 +133,7 @@ jobs:
 
       - name: Publish
         id: publish
-        uses: zerobias-org/devops/nx-actions/content-publish@main
+        uses: zerobias-org/devops/nx-actions/content-publish@feat/neon-support
         with:
           publishToken: ${{ secrets.GITHUB_TOKEN }}
           skip-publish-announcement: ${{ inputs.skip-publish-announcement }}

@@ -153,13 +153,23 @@ runs:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
-    - name: prepublish
+    - name: prepublish changed packages
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        if npm run 2>/dev/null | grep -q "nx:prepublish"; then
-          npm run nx:prepublish
-        fi
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ]; then
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            if jq -e ".scripts[\"nx:prepublish\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "Prepublishing $PROJECT_NAME (from $pkg)"
+              timeout 600 nx nx:prepublish "$PROJECT_NAME" || { echo "Error: prepublish failed for $PROJECT_NAME"; exit 1; }
+            else
+              echo "Skipping $PROJECT_NAME - no nx:prepublish target"
+            fi
+          fi
+        '
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}

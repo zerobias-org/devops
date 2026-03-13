@@ -102,9 +102,8 @@ jobs:
         with:
           method: jwt
           url: ${{ secrets.VAULT_ADDR }}
-          role: zerobias-com-devops-role
+          role: publishing-role
           path: gh-actions
-          jwtGithubAudience: "https://github.com/zerobias-com"
           secrets: |
             operations-kv/data/neon/content api-key | NEON_API_KEY;
             operations-kv/data/neon/content project-id | NEON_PROJECT_ID;

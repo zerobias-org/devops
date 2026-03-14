@@ -164,7 +164,7 @@ runs:
             PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
             if jq -e ".scripts[\"nx:prepublish\"]" "$pkg/package.json" > /dev/null 2>&1; then
               echo "Prepublishing $PROJECT_NAME (from $pkg)"
-              timeout 600 nx nx:prepublish "$PROJECT_NAME" || { echo "Error: prepublish failed for $PROJECT_NAME"; exit 1; }
+              timeout 1200 nx nx:prepublish "$PROJECT_NAME" || { echo "Error: prepublish failed for $PROJECT_NAME"; exit 1; }
             else
               echo "Skipping $PROJECT_NAME - no nx:prepublish target"
             fi

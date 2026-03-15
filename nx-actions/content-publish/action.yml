@@ -157,19 +157,17 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
-        xargs -P4 -I{} bash -c '
-          pkg="{}"
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
             PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
             if jq -e ".scripts[\"nx:prepublish\"]" "$pkg/package.json" > /dev/null 2>&1; then
               echo "Prepublishing $PROJECT_NAME (from $pkg)"
-              timeout 1200 nx nx:prepublish "$PROJECT_NAME" || { echo "Error: prepublish failed for $PROJECT_NAME"; exit 1; }
+              nx nx:prepublish "$PROJECT_NAME" || { echo "Error: prepublish failed for $PROJECT_NAME"; exit 1; }
             else
               echo "Skipping $PROJECT_NAME - no nx:prepublish target"
             fi
           fi
-        '
+        done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}

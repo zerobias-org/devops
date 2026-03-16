@@ -131,7 +131,11 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        npx prepublish-init
+        if [ -x scripts/prepublish-init.sh ]; then
+          bash scripts/prepublish-init.sh
+        else
+          npx prepublish-init
+        fi
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
 

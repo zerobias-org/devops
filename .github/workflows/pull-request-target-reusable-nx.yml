@@ -138,7 +138,7 @@ jobs:
           echo "PGSSLMODE=require" >> $GITHUB_ENV
 
       - name: Run Tests
-        uses: zerobias-org/devops/nx-actions/content-test-fork@feat/neon-support
+        uses: zerobias-org/devops/nx-actions/content-test-fork@4e69916eab7a9336c27d6779b28a1eeb2465d003
         with:
           run-integration-tests: ${{ inputs.run-integration-tests }}
           test-timeout: ${{ inputs.test-timeout }}

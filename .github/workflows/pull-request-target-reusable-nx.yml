@@ -21,7 +21,7 @@ on:
         description: 'Neon parent branch to create from'
         type: string
         required: false
-        default: 'hydra-release'
+        default: 'content-master'
 
 env:
   PGHOST: localhost

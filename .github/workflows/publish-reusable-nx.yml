@@ -18,6 +18,16 @@ on:
         type: boolean
         required: false
         default: false
+      use-neon:
+        description: 'Use Neon database branch instead of local PostgreSQL service'
+        type: boolean
+        required: false
+        default: false
+      neon-parent-branch:
+        description: 'Neon parent branch to create from'
+        type: string
+        required: false
+        default: 'content-master'
 
 env:
   PGHOST: localhost
@@ -85,6 +95,41 @@ jobs:
             operations-kv/data/ci/github username | USERNAME ;
             operations-kv/data/ci/github writePackagesToken | WRITE_TOKEN ;
             operations-kv/data/ci/github zb-token | ZB_TOKEN;
+
+      - name: Import Neon Secrets
+        if: ${{ inputs.use-neon }}
+        uses: hashicorp/vault-action@v2.4.3
+        with:
+          method: jwt
+          url: ${{ secrets.VAULT_ADDR }}
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/neon/content api-key | NEON_API_KEY;
+            operations-kv/data/neon/content project-id | NEON_PROJECT_ID;
+
+      - name: Create Neon Branch
+        if: ${{ inputs.use-neon }}
+        id: create_neon_branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: ${{ inputs.neon-parent-branch }}
+          branch_name: publish-${{ github.event.repository.name }}-${{ github.run_id }}
+          role: neondb_owner
+          database: neondb
+          api_key: ${{ env.NEON_API_KEY }}
+
+      - name: Set Neon PG environment
+        if: ${{ inputs.use-neon }}
+        run: |
+          echo "::add-mask::${{ steps.create_neon_branch.outputs.password }}"
+          echo "PGHOST=${{ steps.create_neon_branch.outputs.db_host }}" >> $GITHUB_ENV
+          echo "PGPORT=5432" >> $GITHUB_ENV
+          echo "PGUSER=neondb_owner" >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ steps.create_neon_branch.outputs.password }}" >> $GITHUB_ENV
+          echo "PGDATABASE=zerobias" >> $GITHUB_ENV
+          echo "PGSSLMODE=require" >> $GITHUB_ENV
 
       - name: Publish
         id: publish
@@ -201,6 +246,14 @@ jobs:
           else
             echo "dev branch does not exist, skipping"
           fi
+
+      - name: Delete Neon Branch
+        if: ${{ always() && inputs.use-neon }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: publish-${{ github.event.repository.name }}-${{ github.run_id }}
+          api_key: ${{ env.NEON_API_KEY }}
 
       - name: Slack Notification
         uses: rtCamp/action-slack-notify@master

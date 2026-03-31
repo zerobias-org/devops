@@ -127,41 +127,19 @@ runs:
         EVENT_SOURCE: Memory
         SCHEDULER_SOURCE: Memory
 
-    - name: test:prepublish:init
-      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
-      shell: bash
-      run: |
-        if [ -x scripts/prepublish-init.sh ]; then
-          bash scripts/prepublish-init.sh
-        else
-          npx prepublish-init
-        fi
-      env:
-        NPM_TOKEN: ${{ env.READ_TOKEN }}
-
     - name: test:prepublish
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
         npm i -g @zerobias-com/platform-dataloader@latest
-        # Then check per-package scripts
-        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
-        xargs -P4 -I{} bash -c '
-          pkg="{}"
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
-            echo "Running prepublishtest for $pkg"
-            (cd "$pkg" && timeout ${{ inputs.test-timeout }} npx prepublishtest)
+            echo "Running dataloader for $pkg"
+            (cd "$pkg" && timeout ${{ inputs.test-timeout }} dataloader -d . --skip-pgboss)
           fi
-        '
+        done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
-        DYNAMO_DB_TABLE: ${{ env.AWS_DYNAMO_DB_TABLE }}
-        AWS_ACCESS_KEY_ID: ${{ env.AWS_DYNAMO_DB_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ env.AWS_DYNAMO_DB_SECRET_ACCESS_KEY }}
-        AWS_REGION: ${{ env.AWS_DYNAMO_DB_REGION }}
-        AWS_ENDPOINT: ${{ env.AWS_DYNAMO_DB_ENDPOINT }}
-        EVENT_SOURCE: Memory
-        SCHEDULER_SOURCE: Memory
 
     - name: test:postpublish
       shell: bash

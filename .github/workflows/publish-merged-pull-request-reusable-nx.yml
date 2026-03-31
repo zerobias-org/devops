@@ -118,7 +118,7 @@ jobs:
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: ${{ inputs.neon-parent-branch }}
-          branch_name: publish-pr/${{ github.event.repository.name }}/${{ github.run_id }}
+          branch_name: publish-pr-${{ github.event.repository.name }}-${{ github.run_id }}
           role: neondb_owner
           database: neondb
           api_key: ${{ env.NEON_API_KEY }}
@@ -145,7 +145,7 @@ jobs:
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          branch: publish-pr/${{ github.event.repository.name }}/${{ github.run_id }}
+          branch: publish-pr-${{ github.event.repository.name }}-${{ github.run_id }}
           api_key: ${{ env.NEON_API_KEY }}
 
   publish-pre-release:

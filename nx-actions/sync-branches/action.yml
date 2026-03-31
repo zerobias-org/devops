@@ -1,0 +1,42 @@
+name: 'Sync Branches'
+description: 'Cascade merge from main down through environment branches (main → uat → qa → dev). Only runs when called from main.'
+inputs:
+  branch:
+    description: 'The branch that triggered the workflow'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Sync branches
+      if: inputs.branch == 'main'
+      shell: bash
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+
+        PREV="main"
+        for TARGET in uat qa dev; do
+          if ! git ls-remote --heads origin "$TARGET" | grep -q "$TARGET"; then
+            echo "$TARGET branch does not exist, skipping"
+            continue
+          fi
+
+          echo "Merging $PREV into $TARGET..."
+          git fetch origin "$TARGET"
+          git checkout "$TARGET"
+          if git merge "origin/$PREV" -m "chore: sync $PREV into $TARGET"; then
+            git push origin "$TARGET"
+            echo "✓ $TARGET synced from $PREV"
+          else
+            echo "::warning::Merge conflict syncing $PREV → $TARGET. Manual resolution required."
+            git merge --abort
+            break
+          fi
+          PREV="$TARGET"
+        done
+
+    - name: Skip sync
+      if: inputs.branch != 'main'
+      shell: bash
+      run: echo "Sync only runs from main — skipping (${{ inputs.branch }})"

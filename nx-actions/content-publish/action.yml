@@ -142,24 +142,17 @@ runs:
     #     ZB_TOKEN: ${{ env.ZB_TOKEN }}
     #     JAVA_OPTS: "-Xms256m -Xmx1024m"
 
-    - name: prepublish init
-      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
-      shell: bash
-      run: |
-        if [ -x scripts/prepublish-init.sh ]; then
-          bash scripts/prepublish-init.sh
-        fi
-      env:
-        NPM_TOKEN: ${{ env.READ_TOKEN }}
-        ZB_TOKEN: ${{ env.ZB_TOKEN }}
-
     - name: prepublish
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        if npm run 2>/dev/null | grep -q "nx:prepublish"; then
-          npm run nx:prepublish
-        fi
+        npm i -g @zerobias-com/platform-dataloader@latest
+        for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
+          if [ -f "$pkg/package.json" ]; then
+            echo "Running dataloader for $pkg"
+            (cd "$pkg" && timeout 300 dataloader -d . --skip-pgboss)
+          fi
+        done
       env:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}

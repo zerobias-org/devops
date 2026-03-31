@@ -150,7 +150,7 @@ runs:
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
             echo "Running dataloader for $pkg"
-            (cd "$pkg" && timeout 300 dataloader -d . --skip-pgboss)
+            (cd "$pkg" && timeout 300 dataloader -d . --skip-pgboss --force-direct)
           fi
         done
       env:

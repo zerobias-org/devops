@@ -149,7 +149,7 @@ jobs:
           api_key: ${{ env.NEON_API_KEY }}
 
   publish-pre-release:
-    runs-on: [self-hosted, linux, docker]
+    runs-on:  ubuntu-22.04
     name: Publish Pre-release
     needs: test
     if: |

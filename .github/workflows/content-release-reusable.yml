@@ -1,0 +1,233 @@
+name: Content Release Reusable
+
+on:
+  workflow_call:
+    inputs:
+      skip-publish-announcement:
+        description: 'Skips release announcement on content-publish'
+        type: string
+        required: false
+        default: 'false'
+      dispatch-sdk-publish:
+        description: 'Dispatch sdk-publish event after successful publish'
+        type: boolean
+        required: false
+        default: false
+      dispatch-hub-sdk-publish:
+        description: 'Dispatch hub-sdk-publish event after successful publish'
+        type: boolean
+        required: false
+        default: false
+      test-timeout:
+        description: 'Timeout in seconds for build and dataloader commands'
+        type: number
+        required: false
+        default: 300
+      neon-parent-branch:
+        description: 'Neon parent branch to create from'
+        type: string
+        required: false
+        default: 'content-master'
+
+env:
+  PGHOST: localhost
+  PGPORT: 5432
+  PGUSER: postgres
+  PGPASSWORD: postgres
+  PGDATABASE: nfa_test
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  EVENT_SOURCE: Memory
+  SCHEDULER_SOURCE: Memory
+  PR_TOKEN: ${{ secrets.PR_TOKEN }}
+  READ_TOKEN: ${{ secrets.READ_TOKEN }}
+  WRITE_TOKEN: ${{ secrets.WRITE_TOKEN }}
+  SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
+  SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+  ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
+  DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+  AWS_PUBLISHING_ROLE: ${{ secrets.AWS_PUBLISHING_ROLE }}
+  AWS_PUBLISHING_REGION: ${{ secrets.AWS_PUBLISHING_REGION }}
+  USERNAME: ${{ secrets.USERNAME }}
+
+jobs:
+  release:
+    runs-on: [self-hosted, linux, docker]
+    steps:
+      - name: Import Secrets
+        uses: hashicorp/vault-action@v2.4.3
+        with:
+          method: jwt
+          url: ${{ secrets.VAULT_ADDR }}
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/ci/github readPackagesToken | NPM_TOKEN;
+            operations-kv/data/ci/github readPackagesToken | READ_TOKEN;
+            operations-kv/data/ci/github readPackagesToken | GITHUB_TOKEN;
+            operations-kv/data/ci/slack devopsNotifications | SLACK_DEVOPS_NOTIFICATIONS;
+            operations-kv/data/ci/github dispatchToken | DISPATCH_TOKEN;
+            operations-kv/data/ci/slack releasesWebhook | SLACK_RELEASES_WEBHOOK;
+            operations-kv/data/ci/github username | USERNAME ;
+            operations-kv/data/ci/github writePackagesToken | WRITE_TOKEN ;
+            operations-kv/data/ci/github zb-token | ZB_TOKEN;
+
+      - name: Import Neon Secrets
+        uses: hashicorp/vault-action@v2.4.3
+        with:
+          method: jwt
+          url: ${{ secrets.VAULT_ADDR }}
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/neon/content api-key | NEON_API_KEY;
+            operations-kv/data/neon/content project-id | NEON_PROJECT_ID;
+
+      - name: Create Neon Branch
+        id: create_neon_branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: ${{ inputs.neon-parent-branch }}
+          branch_name: release-${{ github.event.repository.name }}-${{ github.run_id }}
+          role: neondb_owner
+          database: neondb
+          api_key: ${{ env.NEON_API_KEY }}
+
+      - name: Set Neon PG environment
+        run: |
+          echo "::add-mask::${{ steps.create_neon_branch.outputs.password }}"
+          echo "PGHOST=${{ steps.create_neon_branch.outputs.db_host }}" >> $GITHUB_ENV
+          echo "PGPORT=5432" >> $GITHUB_ENV
+          echo "PGUSER=neondb_owner" >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ steps.create_neon_branch.outputs.password }}" >> $GITHUB_ENV
+          echo "PGDATABASE=zerobias" >> $GITHUB_ENV
+          echo "PGSSLMODE=require" >> $GITHUB_ENV
+
+      - name: Release
+        id: release
+        uses: zerobias-org/devops/nx-actions/content-release@main
+        with:
+          publishToken: ${{ secrets.GITHUB_TOKEN }}
+          skip-publish-announcement: ${{ inputs.skip-publish-announcement }}
+          test-timeout: ${{ inputs.test-timeout }}
+
+      - name: Update bundle
+        if: steps.release.outputs.has_version_changes == 'true'
+        uses: zerobias-org/devops/nx-actions/content-bundle@main
+        with:
+          publishToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Dispatch sdk-publish event
+        if: ${{ inputs.dispatch-sdk-publish && steps.release.outputs.has_version_changes == 'true' }}
+        run: |
+          PACKAGES='${{ steps.release.outputs.published_packages }}'
+          if [ -z "$PACKAGES" ] || [ "$PACKAGES" = "[]" ]; then
+            echo "No packages to dispatch"
+            exit 0
+          fi
+
+          PAYLOAD=$(echo "$PACKAGES" | jq -c '{
+            "event_type": "sdk-publish",
+            "client_payload": {
+              "packages": [.[] | {
+                "name": (.name + "@" + .version),
+                "version": .version,
+                "apiName": (.name | split("-") | .[-1]),
+                "apiPath": (.name | split("-") | .[-1])
+              }]
+            }
+          }')
+
+          echo "Dispatching sdk-publish event to ${{ github.repository }}"
+          echo "Payload: $PAYLOAD"
+
+          curl -X POST \
+            --fail \
+            -H "Authorization: token ${{ env.DISPATCH_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-type: application/json" \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d "$PAYLOAD"
+
+      - name: Dispatch hub-sdk-publish event
+        if: ${{ inputs.dispatch-hub-sdk-publish && steps.release.outputs.has_version_changes == 'true' }}
+        run: |
+          PACKAGES='${{ steps.release.outputs.published_packages }}'
+          if [ -z "$PACKAGES" ] || [ "$PACKAGES" = "[]" ]; then
+            echo "No packages to dispatch"
+            exit 0
+          fi
+
+          PAYLOAD=$(echo "$PACKAGES" | jq -c '{
+            "event_type": "hub-sdk-publish",
+            "client_payload": {
+              "packages": [.[] | {
+                "name": (.name + "@" + .version),
+                "version": .version,
+                "apiName": (.name | split("-") | .[-1]),
+                "apiPath": (.name | split("-") | .[-1])
+              }]
+            }
+          }')
+
+          echo "Dispatching hub-sdk-publish event to ${{ github.repository }}"
+          echo "Payload: $PAYLOAD"
+
+          curl -X POST \
+            --fail \
+            -H "Authorization: token ${{ env.DISPATCH_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-type: application/json" \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d "$PAYLOAD"
+
+      - name: Sync qa and dev branches
+        if: success()
+        shell: bash
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+
+          if git ls-remote --heads origin qa | grep -q qa; then
+            echo "Merging main into qa..."
+            git fetch origin qa
+            git checkout qa
+            git merge origin/main -m "chore: merge main into qa"
+            git push origin qa
+          else
+            echo "qa branch does not exist, skipping"
+          fi
+
+          if git ls-remote --heads origin dev | grep -q dev; then
+            echo "Merging qa into dev..."
+            git fetch origin dev
+            git checkout dev
+            if git ls-remote --heads origin qa | grep -q qa; then
+              git merge origin/qa -m "chore: merge qa into dev"
+            else
+              git merge origin/main -m "chore: merge main into dev"
+            fi
+            git push origin dev
+          else
+            echo "dev branch does not exist, skipping"
+          fi
+
+      - name: Delete Neon Branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: release-${{ github.event.repository.name }}-${{ github.run_id }}
+          api_key: ${{ env.NEON_API_KEY }}
+
+      - name: Slack Notification
+        uses: rtCamp/action-slack-notify@master
+        if: failure()
+        env:
+          SLACK_WEBHOOK: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
+          SLACK_ICON_EMOJI: ":fire"
+          MSG_MINIMAL: 'true'
+          SLACK_TITLE: ":fire: ${{ github.repository }} release failed"
+          SLACK_MESSAGE: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          SLACK_COLOR: danger

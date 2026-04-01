@@ -38,7 +38,7 @@ env:
 jobs:
   test:
     name: Test
-    runs-on: [self-hosted, linux, docker]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Import Secrets
@@ -105,7 +105,7 @@ jobs:
           api_key: ${{ env.NEON_API_KEY }}
 
   publish-pre-release:
-    runs-on: [self-hosted, linux, docker]
+    runs-on: ubuntu-latest
     name: Publish Pre-release
     needs: test
     if: |

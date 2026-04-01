@@ -55,7 +55,7 @@ env:
 jobs:
   test:
     name: Test
-    runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
+    runs-on: [self-hosted, linux, fargate]
 
     services:
       postgres:
@@ -149,7 +149,7 @@ jobs:
           api_key: ${{ env.NEON_API_KEY }}
 
   publish-pre-release:
-    runs-on: ubuntu-22.04 # TO DO: when self hosted runner enabled, change to [self-hosted, Linux]
+    runs-on: [self-hosted, linux, fargate]
     name: Publish Pre-release
     needs: test
     if: |

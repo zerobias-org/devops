@@ -1,0 +1,159 @@
+name: Content Prerelease Reusable
+
+on:
+  workflow_call:
+    inputs:
+      test-timeout:
+        description: 'Timeout in seconds for build and dataloader commands'
+        required: false
+        default: 300
+        type: number
+      neon-parent-branch:
+        description: 'Neon parent branch to create from'
+        type: string
+        required: false
+        default: 'content-master'
+
+env:
+  PGHOST: localhost
+  PGPORT: 5432
+  PGUSER: postgres
+  PGPASSWORD: postgres
+  PGDATABASE: nfa_test
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  EVENT_SOURCE: Memory
+  SCHEDULER_SOURCE: Memory
+  PR_TOKEN: ${{ secrets.PR_TOKEN }}
+  READ_TOKEN: ${{ secrets.READ_TOKEN }}
+  WRITE_TOKEN: ${{ secrets.WRITE_TOKEN }}
+  SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
+  SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+  ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
+  DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+  AWS_PUBLISHING_ROLE: ${{ secrets.AWS_PUBLISHING_ROLE }}
+  AWS_PUBLISHING_REGION: ${{ secrets.AWS_PUBLISHING_REGION }}
+  USERNAME: ${{ secrets.USERNAME }}
+
+jobs:
+  test:
+    name: Test
+    runs-on: [self-hosted, linux, docker]
+
+    steps:
+      - name: Import Secrets
+        uses: hashicorp/vault-action@v2.4.3
+        with:
+          method: jwt
+          url: ${{ secrets.VAULT_ADDR }}
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/ci/github readPackagesToken | NPM_TOKEN;
+            operations-kv/data/ci/github readPackagesToken | READ_TOKEN;
+            operations-kv/data/ci/github readPackagesToken | GITHUB_TOKEN;
+            operations-kv/data/ci/slack devopsNotifications | SLACK_DEVOPS_NOTIFICATIONS;
+            operations-kv/data/ci/github dispatchToken | DISPATCH_TOKEN;
+            operations-kv/data/ci/slack releasesWebhook | SLACK_RELEASES_WEBHOOK;
+            operations-kv/data/ci/github username | USERNAME ;
+            operations-kv/data/ci/github writePackagesToken | WRITE_TOKEN ;
+            operations-kv/data/ci/github zb-token | ZB_TOKEN;
+
+      - name: Import Neon Secrets
+        uses: hashicorp/vault-action@v2.4.3
+        with:
+          method: jwt
+          url: ${{ secrets.VAULT_ADDR }}
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/neon/content api-key | NEON_API_KEY;
+            operations-kv/data/neon/content project-id | NEON_PROJECT_ID;
+
+      - name: Create Neon Branch
+        id: create_neon_branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: ${{ inputs.neon-parent-branch }}
+          branch_name: prerelease-${{ github.event.repository.name }}-${{ github.run_id }}
+          role: neondb_owner
+          database: neondb
+          api_key: ${{ env.NEON_API_KEY }}
+
+      - name: Set Neon PG environment
+        run: |
+          echo "::add-mask::${{ steps.create_neon_branch.outputs.password }}"
+          echo "PGHOST=${{ steps.create_neon_branch.outputs.db_host }}" >> $GITHUB_ENV
+          echo "PGPORT=5432" >> $GITHUB_ENV
+          echo "PGUSER=neondb_owner" >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ steps.create_neon_branch.outputs.password }}" >> $GITHUB_ENV
+          echo "PGDATABASE=zerobias" >> $GITHUB_ENV
+          echo "PGSSLMODE=require" >> $GITHUB_ENV
+
+      - name: Run Tests
+        uses: zerobias-org/devops/nx-actions/content-validate@main
+        with:
+          test-timeout: ${{ inputs.test-timeout }}
+
+      - name: Delete Neon Branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: prerelease-${{ github.event.repository.name }}-${{ github.run_id }}
+          api_key: ${{ env.NEON_API_KEY }}
+
+  publish-pre-release:
+    runs-on: [self-hosted, linux, docker]
+    name: Publish Pre-release
+    needs: test
+    if: |
+      always()
+      && !cancelled()
+      && !contains(needs.*.result, 'failure')
+    steps:
+      - name: Import Secrets
+        uses: hashicorp/vault-action@v2.4.3
+        with:
+          method: jwt
+          url: ${{ secrets.VAULT_ADDR }}
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/ci/github readPackagesToken | NPM_TOKEN;
+            operations-kv/data/ci/github readPackagesToken | READ_TOKEN;
+            operations-kv/data/ci/github readPackagesToken | GITHUB_TOKEN;
+            operations-kv/data/ci/slack devopsNotifications | SLACK_DEVOPS_NOTIFICATIONS;
+            operations-kv/data/ci/github dispatchToken | DISPATCH_TOKEN;
+            operations-kv/data/ci/slack releasesWebhook | SLACK_RELEASES_WEBHOOK;
+            operations-kv/data/ci/github username | USERNAME ;
+            operations-kv/data/ci/github writePackagesToken | WRITE_TOKEN ;
+            operations-kv/data/ci/github zb-token | ZB_TOKEN;
+
+      - name: Content PR Publish
+        uses: zerobias-org/devops/nx-actions/content-pr-publish@main
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: '0.117.0'
+          extended: true
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::961260934100:role/github-actions-publishing-role
+          role-session-name: ${{ github.event.repository.name }}
+          aws-region: us-east-1
+
+      - name: Slack Notification
+        uses: rtCamp/action-slack-notify@master
+        if: failure()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+          SLACK_ICON_EMOJI: ':fire'
+          MSG_MINIMAL: 'true'
+          SLACK_TITLE: ':fire: ${{ github.repository }} pre-release failed'
+          SLACK_MESSAGE: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+          SLACK_COLOR: danger

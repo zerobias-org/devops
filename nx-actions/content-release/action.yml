@@ -1,0 +1,326 @@
+name: 'Content Release'
+description: 'Builds, validates, versions, and publishes content packages to NPM'
+inputs:
+  publishToken:
+    description: Token with permissions to publish packages
+    required: true
+  update-all:
+    description: 'Set to true to update all content in the repo'
+    required: false
+    default: 'false'
+  skip-publish-announcement:
+    description: 'Skips release announcement'
+    required: false
+    default: 'false'
+  test-timeout:
+    description: 'Timeout in seconds for build and dataloader commands'
+    required: false
+    default: '300'
+
+outputs:
+  has_version_changes:
+    description: 'Whether any packages were versioned and published'
+    value: ${{ steps.set_outputs.outputs.has_version_changes }}
+  published_packages:
+    description: 'JSON array of published packages with name, version, location'
+    value: ${{ steps.set_outputs.outputs.published_packages }}
+  changed_dirs:
+    description: 'Space-separated list of changed package directories'
+    value: ${{ steps.detect_changes.outputs.CHANGED_DIRS }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Restore git cache
+      uses: actions/cache@v4
+      with:
+        path: .git
+        key: ${{ github.repository }}-git-folder
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: zerobias-org/devops/nx-actions/setup-node@main
+
+    - name: Setup Hugo
+      uses: peaceiris/actions-hugo@v2
+      with:
+        hugo-version: '0.117.0'
+        extended: true
+
+    - name: Configure git
+      shell: bash
+      run: |
+        git config --global user.email "ci@neverfail.com"
+        git config --global user.name "@$GITHUB_ACTOR"
+
+    - name: Install nx
+      shell: bash
+      run: npm install -g nx@22.4.1
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cp .npmrc $HOME/.npmrc
+        npm ci
+        npm install -g @zerobias-org/devops-tools@latest @zerobias-com/platform-dataloader@latest
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Detect changed packages
+      id: detect_changes
+      shell: bash
+      run: |
+        LAST_PUBLISH_TAG=$(git describe --tags --abbrev=0 --match="*" 2>/dev/null || echo "HEAD~1")
+        echo "Using base ref: $LAST_PUBLISH_TAG"
+
+        CHANGED_DIRS=$(npx detect-changes "$LAST_PUBLISH_TAG")
+        if [ -z "$CHANGED_DIRS" ]; then
+          echo "No packages changed, skipping build/publish"
+          echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
+        else
+          echo "Changed packages:"
+          echo "$CHANGED_DIRS"
+          CHANGED_DIRS_INLINE=$(echo "$CHANGED_DIRS" | tr '\n' ' ')
+          echo "CHANGED_DIRS=$CHANGED_DIRS_INLINE" >> $GITHUB_OUTPUT
+          echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
+          echo "BASE_REF=$LAST_PUBLISH_TAG" >> $GITHUB_OUTPUT
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: CDN Update
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      uses: zerobias-org/devops/nx-actions/cdn-update@main
+      with:
+        update-all: ${{ inputs.update-all }}
+        changed-dirs: ${{ steps.detect_changes.outputs.CHANGED_DIRS }}
+
+    - name: Build changed packages
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ]; then
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "::group::Build $PROJECT_NAME"
+              timeout ${{ inputs.test-timeout }} nx nx:build "$PROJECT_NAME" || { echo "::error::Build failed for $PROJECT_NAME"; exit 1; }
+              echo "::endgroup::"
+            else
+              echo "Skipping $PROJECT_NAME - no nx:build target"
+            fi
+          fi
+        '
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+        JAVA_OPTS: "-Xms256m -Xmx1024m"
+
+    - name: Validate schemas (dataloader)
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ]; then
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            echo "::group::Dataloader $PROJECT_NAME"
+            (cd "$pkg" && timeout ${{ inputs.test-timeout }} dataloader -d . --skip-pgboss --force-direct)
+            echo "::endgroup::"
+          fi
+        '
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Version packages
+      id: version
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+        NX_DAEMON: 'false'
+      run: |
+        echo "::group::Lerna version"
+        echo `git status`
+
+        CHANGED_NAMES=$(npx get-changed-package-names "${{ steps.detect_changes.outputs.BASE_REF }}")
+        if [ -z "$CHANGED_NAMES" ]; then
+          echo "No package names found, skipping version"
+          echo "HAS_VERSION_CHANGES=false" >> $GITHUB_OUTPUT
+          echo "::endgroup::"
+          exit 0
+        fi
+        echo "Versioning packages:"
+        echo "$CHANGED_NAMES"
+
+        FORCE_PUBLISH=$(echo "$CHANGED_NAMES" | tr '\n' ',' | sed 's/,$//')
+        echo "Force publish list: $FORCE_PUBLISH"
+
+        npx lerna version --force-publish="$FORCE_PUBLISH" --no-git-tag-version --no-push --conventional-commits --conventional-graduate --yes
+
+        echo "HAS_VERSION_CHANGES=true" >> $GITHUB_OUTPUT
+        echo "::endgroup::"
+
+    - name: Commit version changes
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      uses: EndBug/add-and-commit@v9
+      with:
+        add: '.'
+        message: 'chore(release): bump version'
+        default_author: github_actions
+        push: true
+
+    - name: Publish packages
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.publishToken }}
+        READ_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+      run: |
+        PUBLISH_RESULTS_DIR=$(mktemp -d)
+        export PUBLISH_RESULTS_DIR
+
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ]; then
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            echo "::group::Publish $PROJECT_NAME"
+            if (
+              TEMP_PUBLISH_DIR=$(mktemp -d)
+              cp -r "$pkg"/* "$pkg"/.[!.]* "$TEMP_PUBLISH_DIR/" 2>/dev/null || true
+              cd "$TEMP_PUBLISH_DIR"
+              NPM_TOKEN=$READ_TOKEN timeout 120 npm install --ignore-scripts --include=optional
+              npm shrinkwrap
+              echo "Generated npm-shrinkwrap.json for $(jq -r .name package.json)"
+              NPM_TOKEN=$NPM_TOKEN timeout 120 npm publish --tag latest
+            ); then
+              NAME=$(jq -r ".name" "$pkg/package.json")
+              VERSION=$(jq -r ".version" "$pkg/package.json")
+              LOCATION=$(realpath "$pkg")
+              HASH=$(echo "$pkg" | md5sum | cut -d" " -f1)
+              echo "{\"name\": \"$NAME\", \"version\": \"$VERSION\", \"location\": \"$LOCATION\"}" > "$PUBLISH_RESULTS_DIR/$HASH.json"
+            else
+              echo "::error::Failed to publish $pkg"
+            fi
+            echo "::endgroup::"
+          fi
+        '
+
+        echo "[]" > /tmp/published-packages.json
+        for result_file in "$PUBLISH_RESULTS_DIR"/*.json; do
+          if [ -f "$result_file" ]; then
+            jq --slurpfile pkg "$result_file" '. += $pkg' /tmp/published-packages.json > /tmp/published-packages.tmp.json
+            mv /tmp/published-packages.tmp.json /tmp/published-packages.json
+          fi
+        done
+        rm -rf "$PUBLISH_RESULTS_DIR"
+
+        echo "PUBLISHED_PACKAGES_FILE=/tmp/published-packages.json" >> $GITHUB_ENV
+        echo "HAS_VERSION_CHANGES=true" >> $GITHUB_ENV
+        echo "Published packages:"
+        cat /tmp/published-packages.json
+
+    - name: Create and push tags
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+      run: |
+        if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
+          jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE" | \
+          xargs -P4 -I{} bash -c '
+            pkg="{}"
+            if [ -f "$pkg/package.json" ]; then
+              PKG_NAME=$(jq -r ".name" "$pkg/package.json")
+              PKG_VERSION=$(jq -r ".version" "$pkg/package.json")
+              if timeout 30 npm view "$PKG_NAME@$PKG_VERSION" version > /dev/null 2>&1; then
+                TAG_NAME="${PKG_NAME}@${PKG_VERSION}"
+                echo "::group::Tag $TAG_NAME"
+                git tag -f "$TAG_NAME" -m "Published $PKG_NAME version $PKG_VERSION"
+                timeout 60 git push origin "$TAG_NAME" --force || echo "::warning::Failed to push tag $TAG_NAME"
+                echo "::endgroup::"
+              else
+                echo "::warning::Skipping tag for $PKG_NAME@$PKG_VERSION - not found in registry"
+              fi
+            fi
+          '
+        else
+          echo "No published packages file found, skipping tags"
+        fi
+
+    - name: Set action outputs
+      id: set_outputs
+      shell: bash
+      run: |
+        echo "has_version_changes=${{ steps.version.outputs.HAS_VERSION_CHANGES || 'false' }}" >> $GITHUB_OUTPUT
+        if [ -n "${{ env.PUBLISHED_PACKAGES_FILE }}" ] && [ -f "${{ env.PUBLISHED_PACKAGES_FILE }}" ]; then
+          PACKAGES=$(cat "${{ env.PUBLISHED_PACKAGES_FILE }}" | jq -c '.')
+          echo "published_packages=$PACKAGES" >> $GITHUB_OUTPUT
+        else
+          echo "published_packages=[]" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Update dist tags
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.publishToken }}
+        READ_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+      run: |
+        if [ -n "$PUBLISHED_PACKAGES_FILE" ] && [ -f "$PUBLISHED_PACKAGES_FILE" ]; then
+          for pkg in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do
+            NAME=$(jq -r '.name' "$pkg/package.json")
+            VERSION=$(jq -r '.version' "$pkg/package.json")
+            if NPM_TOKEN=$READ_TOKEN timeout 30 npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
+              echo "::group::Dist tags $NAME@$VERSION"
+              timeout 30 npm dist-tag add "$NAME@$VERSION" dev || echo "::warning::Failed to add dev tag"
+              timeout 30 npm dist-tag add "$NAME@$VERSION" qa || echo "::warning::Failed to add qa tag"
+              timeout 30 npm dist-tag add "$NAME@$VERSION" uat || echo "::warning::Failed to add uat tag"
+              timeout 30 npm dist-tag add "$NAME@$VERSION" rc || echo "::warning::Failed to add rc tag"
+              echo "::endgroup::"
+            else
+              echo "::warning::Skipping dist tags for $NAME@$VERSION - not found in registry"
+            fi
+          done
+        else
+          echo "No published packages file found, skipping dist tags"
+        fi
+
+    - name: Post publish
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true'
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.publishToken }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+        READ_TOKEN: ${{ env.READ_TOKEN }}
+        PUBLISHED_PACKAGES_FILE: ${{ env.PUBLISHED_PACKAGES_FILE }}
+      run: |
+        if [ -x scripts/postpublish.sh ]; then
+          scripts/postpublish.sh
+        fi
+
+    - name: Release Announcement
+      if: ${{ inputs.skip-publish-announcement != 'true' && steps.version.outputs.HAS_VERSION_CHANGES == 'true' }}
+      uses: zerobias-org/devops/nx-actions/release-announcement@main
+      with:
+        packages-file: ${{ env.PUBLISHED_PACKAGES_FILE }}
+        branch: ${{ github.ref_name }}
+        dist-tag: latest
+        aws-role-arn: arn:aws:iam::961260934100:role/github-actions-publishing-role

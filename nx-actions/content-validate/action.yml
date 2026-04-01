@@ -1,0 +1,200 @@
+name: 'Content Validate'
+description: 'Validates content packages — builds, runs dataloader, and executes tests on changed packages'
+inputs:
+  test-timeout:
+    description: 'Timeout in seconds for build, dataloader, and test commands'
+    required: false
+    default: '300'
+  is-fork:
+    description: 'Set to true when running on a forked PR (enables changed-files security check)'
+    required: false
+    default: 'false'
+  run-integration-tests:
+    description: 'Set to true to run integration tests'
+    required: false
+    default: 'false'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Restore git cache
+      uses: actions/cache@v4
+      with:
+        path: .git
+        key: ${{ github.repository }}-git-folder
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.is-fork == 'true' && github.event.pull_request.head.repo.full_name || github.repository }}
+        fetch-depth: 0
+        ref: ${{ github.head_ref }}
+
+    # Security check: forked PRs can only modify package/ and package-lock.json
+    - name: Get changed files
+      if: inputs.is-fork == 'true'
+      id: changed-files
+      uses: tj-actions/changed-files@6cb76d07bee4c9772c6882c06c37837bf82a04d3 # v46
+
+    - name: Validate changed files (fork)
+      if: inputs.is-fork == 'true'
+      shell: bash
+      env:
+        ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+      run: |
+        for file in ${ALL_CHANGED_FILES}; do
+          if [[ ! "$file" == "package/"* ]] && [[ "$file" != "package-lock.json" ]]; then
+            echo "::error::File '$file' is outside of the package/ directory — not allowed in forked PRs"
+            exit 1
+          fi
+        done
+
+    - name: Setup node
+      uses: zerobias-org/devops/nx-actions/setup-node@main
+
+    - name: Setup Hugo
+      uses: peaceiris/actions-hugo@v2
+      with:
+        hugo-version: '0.117.0'
+        extended: true
+
+    - name: Install nx
+      shell: bash
+      run: npm install -g nx@22.4.2
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cp .npmrc $HOME/.npmrc
+        npm ci
+        npm install -g @zerobias-org/devops-tools@latest @zerobias-com/platform-dataloader@latest
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Detect changed packages
+      id: detect_changes
+      shell: bash
+      run: |
+        CHANGED_DIRS=$(npx detect-changes origin/main)
+        if [ -z "$CHANGED_DIRS" ]; then
+          echo "No packages changed, skipping build/test"
+          echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
+        else
+          echo "Changed packages:"
+          echo "$CHANGED_DIRS"
+          CHANGED_DIRS_INLINE=$(echo "$CHANGED_DIRS" | tr '\n' ' ')
+          echo "CHANGED_DIRS=$CHANGED_DIRS_INLINE" >> $GITHUB_OUTPUT
+          echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Build changed packages
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ]; then
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            if jq -e ".scripts[\"nx:build\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "::group::Build $PROJECT_NAME"
+              timeout ${{ inputs.test-timeout }} nx nx:build "$PROJECT_NAME" || { echo "::error::Build failed for $PROJECT_NAME"; exit 1; }
+              echo "::endgroup::"
+            else
+              echo "Skipping $PROJECT_NAME - no nx:build target"
+            fi
+          fi
+        '
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+        JAVA_OPTS: "-Xms256m -Xmx1024m"
+
+    - name: Validate schemas (dataloader)
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ]; then
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            echo "::group::Dataloader $PROJECT_NAME"
+            (cd "$pkg" && timeout ${{ inputs.test-timeout }} dataloader -d . --skip-pgboss --force-direct)
+            echo "::endgroup::"
+          fi
+        '
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
+    - name: Run tests
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        RUN_INTEGRATION="${{ inputs.run-integration-tests }}"
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -P4 -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ]; then
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            cd "$pkg"
+            if grep -q "\"test:unit\"" package.json; then
+              echo "::group::Unit tests $PROJECT_NAME"
+              timeout ${{ inputs.test-timeout }} npm run test:unit || true
+              echo "::endgroup::"
+            fi
+            if [[ "'"$RUN_INTEGRATION"'" == "true" ]] && grep -q "\"test:integration\"" package.json; then
+              echo "::group::Integration tests $PROJECT_NAME"
+              timeout ${{ inputs.test-timeout }} npm run test:integration || true
+              echo "::endgroup::"
+            fi
+          fi
+        '
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        EVENT_SOURCE: Memory
+        SCHEDULER_SOURCE: Memory
+
+    - name: Dry-run postpublish
+      shell: bash
+      run: |
+        if [ -x scripts/postpublish.sh ]; then
+          bash scripts/postpublish.sh --dry-run
+        fi
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        UPLOAD_FOLDER_NAME: ci-upload
+
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ci-upload
+        path: ci-upload/
+        if-no-files-found: ignore
+        retention-days: 1
+
+    - name: Slack Notification on failure
+      uses: slackapi/slack-github-action@v2.1.1
+      if: failure() && env.SLACK_DEVOPS_NOTIFICATIONS != ''
+      with:
+        webhook: ${{ env.SLACK_DEVOPS_NOTIFICATIONS }}
+        webhook-type: incoming-webhook
+        payload: |
+          text: "${{ github.repository }} validation failed"
+          attachments:
+            - color: "#ff0000"
+              fallback: "Validation Failed"
+              title: ":fire: ${{ github.repository }} validation failed"
+              text: "Workflow run failed"
+              footer: "<https://github.com/${{ github.repository }}|${{ github.repository }}> • <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>"
+              mrkdwn_in:
+                - text
+                - footer

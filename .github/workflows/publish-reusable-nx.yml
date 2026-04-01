@@ -81,7 +81,7 @@ jobs:
         image: amazon/dynamodb-local
         ports:
           - 18000:8000
-    runs-on: [self-hosted, linux, fargate]
+    runs-on: [self-hosted, linux, docker]
     steps:
       - name: Import Secrets
         uses: hashicorp/vault-action@v2.4.3

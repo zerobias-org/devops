@@ -55,7 +55,7 @@ env:
 jobs:
   test:
     name: Test
-    runs-on: [self-hosted, linux, fargate]
+    runs-on: [self-hosted, linux, docker]
 
     services:
       postgres:
@@ -149,7 +149,7 @@ jobs:
           api_key: ${{ env.NEON_API_KEY }}
 
   publish-pre-release:
-    runs-on: [self-hosted, linux, fargate]
+    runs-on: [self-hosted, linux, docker]
     name: Publish Pre-release
     needs: test
     if: |

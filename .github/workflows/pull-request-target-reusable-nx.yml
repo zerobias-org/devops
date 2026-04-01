@@ -55,7 +55,7 @@ env:
 jobs:
   test:
     name: Test
-    runs-on: [self-hosted, linux, fargate]
+    runs-on: [self-hosted, linux, docker]
     if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
       && (github.event.action == 'labeled' || github.event.action == 'synchronize')
       && contains(github.event.pull_request.labels.*.name, 'approved')

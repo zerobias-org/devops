@@ -97,6 +97,7 @@ runs:
       uses: zerobias-org/devops/actions/setup-node@main
 
     - name: Configure git user
+      if: inputs.pre-built != 'true'
       shell: bash
       run: |
         git config user.name github-actions

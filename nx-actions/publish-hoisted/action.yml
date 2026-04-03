@@ -93,6 +93,32 @@ runs:
 
         # Detect packages with actual source changes (ignoring lock files)
         CHANGED_DIRS=$(npx detect-changes "$LAST_PUBLISH_TAG" --hoisted)
+
+        # Check if stack/ workspace needs rebuilding due to zbb.yaml, .zbb.yaml, or test/ changes
+        HAS_STACK_WORKSPACE=$(jq -e '.workspaces // [] | index("stack")' package.json 2>/dev/null && echo "true" || echo "false")
+        if [ "$HAS_STACK_WORKSPACE" = "true" ] && [ -f "stack/package.json" ]; then
+          STACK_TRIGGER_FILES=$(git diff --name-only "$LAST_PUBLISH_TAG"..HEAD -- zbb.yaml .zbb.yaml 'test/**' 2>/dev/null || true)
+          if [ -n "$STACK_TRIGGER_FILES" ]; then
+            echo "Stack trigger files changed:"
+            echo "$STACK_TRIGGER_FILES"
+            # Copy files into stack/ so the package content is updated
+            cp .zbb.yaml stack/ 2>/dev/null || true
+            cp zbb.yaml stack/ 2>/dev/null || true
+            mkdir -p stack/test/
+            cp -r test/** stack/test/ 2>/dev/null || true
+            echo "Copied stack artifact files"
+            # Add stack to changed dirs if not already there
+            if ! echo "$CHANGED_DIRS" | grep -q "^stack$"; then
+              if [ -z "$CHANGED_DIRS" ]; then
+                CHANGED_DIRS="stack"
+              else
+                CHANGED_DIRS=$(printf "%s\nstack" "$CHANGED_DIRS")
+              fi
+              echo "Added stack/ to changed packages"
+            fi
+          fi
+        fi
+
         if [ -z "$CHANGED_DIRS" ]; then
           echo "No packages changed, skipping build/publish"
           echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT

@@ -94,29 +94,32 @@ runs:
         # Detect packages with actual source changes (ignoring lock files)
         CHANGED_DIRS=$(npx detect-changes "$LAST_PUBLISH_TAG" --hoisted)
 
-        # Check if stack/ workspace needs rebuilding due to zbb.yaml, .zbb.yaml, or test/ changes
-        HAS_STACK_WORKSPACE=$(jq -e '.workspaces // [] | index("stack")' package.json 2>/dev/null && echo "true" || echo "false")
-        if [ "$HAS_STACK_WORKSPACE" = "true" ] && [ -f "stack/package.json" ]; then
+        # Stack artifact: copy source files into stack/ and ensure it's in changed list
+        # Triggers when: stack already detected as changed, OR stack is a workspace with trigger file changes
+        STACK_NEEDS_COPY="false"
+        if echo "$CHANGED_DIRS" | grep -q "^stack$"; then
+          STACK_NEEDS_COPY="true"
+        elif jq -e '.workspaces // [] | index("stack")' package.json > /dev/null 2>&1 && [ -d "stack" ]; then
           STACK_TRIGGER_FILES=$(git diff --name-only "$LAST_PUBLISH_TAG"..HEAD -- zbb.yaml .zbb.yaml 'test/**' 2>/dev/null || true)
           if [ -n "$STACK_TRIGGER_FILES" ]; then
+            STACK_NEEDS_COPY="true"
             echo "Stack trigger files changed:"
             echo "$STACK_TRIGGER_FILES"
-            # Copy files into stack/ so the package content is updated
-            cp .zbb.yaml stack/ 2>/dev/null || true
-            cp zbb.yaml stack/ 2>/dev/null || true
-            mkdir -p stack/test/
-            cp -r test/** stack/test/ 2>/dev/null || true
-            echo "Copied stack artifact files"
-            # Add stack to changed dirs if not already there
-            if ! echo "$CHANGED_DIRS" | grep -q "^stack$"; then
-              if [ -z "$CHANGED_DIRS" ]; then
-                CHANGED_DIRS="stack"
-              else
-                CHANGED_DIRS=$(printf "%s\nstack" "$CHANGED_DIRS")
-              fi
-              echo "Added stack/ to changed packages"
+            # Add stack to changed dirs
+            if [ -z "$CHANGED_DIRS" ]; then
+              CHANGED_DIRS="stack"
+            else
+              CHANGED_DIRS=$(printf "%s\nstack" "$CHANGED_DIRS")
             fi
+            echo "Added stack/ to changed packages"
           fi
+        fi
+        if [ "$STACK_NEEDS_COPY" = "true" ] && [ -d "stack" ]; then
+          cp .zbb.yaml stack/ 2>/dev/null || true
+          cp zbb.yaml stack/ 2>/dev/null || true
+          mkdir -p stack/test/
+          cp -r test/** stack/test/ 2>/dev/null || true
+          echo "Copied stack artifact files into stack/"
         fi
 
         if [ -z "$CHANGED_DIRS" ]; then

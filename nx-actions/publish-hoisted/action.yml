@@ -213,6 +213,22 @@ runs:
 
         # Get changed package names for filtered lerna operations
         CHANGED_NAMES=$(npx get-changed-package-names "${{ steps.detect_changes.outputs.BASE_REF }}" --hoisted)
+
+        # If stack was added to changed dirs (via trigger file detection), ensure its
+        # package name is included — get-changed-package-names may miss it since
+        # stack/ changes come from the copy step, not from git diff
+        if echo "${{ steps.detect_changes.outputs.SORTED_DIRS }}" | grep -q "stack" && [ -f "stack/package.json" ]; then
+          STACK_PKG_NAME=$(jq -r '.name' stack/package.json)
+          if [ -n "$STACK_PKG_NAME" ] && ! echo "$CHANGED_NAMES" | grep -q "$STACK_PKG_NAME"; then
+            if [ -z "$CHANGED_NAMES" ]; then
+              CHANGED_NAMES="$STACK_PKG_NAME"
+            else
+              CHANGED_NAMES=$(printf "%s\n%s" "$CHANGED_NAMES" "$STACK_PKG_NAME")
+            fi
+            echo "Added stack package: $STACK_PKG_NAME"
+          fi
+        fi
+
         if [ -z "$CHANGED_NAMES" ]; then
           echo "No package names found, skipping version"
           echo "HAS_VERSION_CHANGES=false" >> $GITHUB_OUTPUT

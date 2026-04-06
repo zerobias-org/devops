@@ -120,6 +120,25 @@ runs:
           mkdir -p stack/test/
           cp -r test/** stack/test/ 2>/dev/null || true
           echo "Copied stack artifact files into stack/"
+
+          # Validate stack zbb.yaml — catch duplicate keys, syntax errors, missing name
+          if [ -f "stack/zbb.yaml" ]; then
+            node -e "
+              const fs = require('fs');
+              const yaml = require('js-yaml');
+              try {
+                const doc = yaml.load(fs.readFileSync('stack/zbb.yaml', 'utf8'));
+                if (!doc || !doc.name) {
+                  console.error('ERROR: stack/zbb.yaml missing required \"name\" field');
+                  process.exit(1);
+                }
+                console.log('Stack manifest validated: ' + doc.name + '@' + (doc.version || 'unknown'));
+              } catch (e) {
+                console.error('ERROR: stack/zbb.yaml is invalid YAML: ' + e.message);
+                process.exit(1);
+              }
+            " || exit 1
+          fi
         fi
 
         if [ -z "$CHANGED_DIRS" ]; then

@@ -115,26 +115,22 @@ runs:
           fi
         fi
         if [ "$STACK_NEEDS_COPY" = "true" ] && [ -d "stack" ]; then
-          cp .zbb.yaml stack/ 2>/dev/null || true
-          cp zbb.yaml stack/ 2>/dev/null || true
-          mkdir -p stack/test/
-          cp -r test/** stack/test/ 2>/dev/null || true
-          echo "Copied stack artifact files into stack/"
-
-          # Validate stack zbb.yaml — catch duplicate keys, syntax errors, missing name
-          if [ -f "stack/zbb.yaml" ]; then
+          # Validate root zbb.yaml before publish — catch duplicate keys, syntax errors, missing name
+          # The stack/package.json prepack script copies root files into stack/ at publish time,
+          # so we validate the source of truth (root) here.
+          if [ -f "zbb.yaml" ]; then
             node -e "
               const fs = require('fs');
               const yaml = require('js-yaml');
               try {
-                const doc = yaml.load(fs.readFileSync('stack/zbb.yaml', 'utf8'));
+                const doc = yaml.load(fs.readFileSync('zbb.yaml', 'utf8'));
                 if (!doc || !doc.name) {
-                  console.error('ERROR: stack/zbb.yaml missing required \"name\" field');
+                  console.error('ERROR: zbb.yaml missing required \"name\" field');
                   process.exit(1);
                 }
                 console.log('Stack manifest validated: ' + doc.name + '@' + (doc.version || 'unknown'));
               } catch (e) {
-                console.error('ERROR: stack/zbb.yaml is invalid YAML: ' + e.message);
+                console.error('ERROR: zbb.yaml is invalid YAML: ' + e.message);
                 process.exit(1);
               }
             " || exit 1

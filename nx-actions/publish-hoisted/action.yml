@@ -217,7 +217,7 @@ runs:
         # If stack was added to changed dirs (via trigger file detection), ensure its
         # package name is included — get-changed-package-names may miss it since
         # stack/ changes come from the copy step, not from git diff
-        if echo "${{ steps.detect_changes.outputs.SORTED_DIRS }}" | grep -q "stack" && [ -f "stack/package.json" ]; then
+        if echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | grep -q "stack" && [ -f "stack/package.json" ]; then
           STACK_PKG_NAME=$(jq -r '.name' stack/package.json)
           if [ -n "$STACK_PKG_NAME" ] && ! echo "$CHANGED_NAMES" | grep -q "$STACK_PKG_NAME"; then
             if [ -z "$CHANGED_NAMES" ]; then

@@ -115,9 +115,15 @@ runs:
           fi
         fi
         if [ "$STACK_NEEDS_COPY" = "true" ] && [ -d "stack" ]; then
-          # Validate root zbb.yaml before publish — catch duplicate keys, syntax errors, missing name
-          # The stack/package.json prepack script copies root files into stack/ at publish time,
-          # so we validate the source of truth (root) here.
+          # Copy root files into stack/ — npm publish runs prepack in a temp dir
+          # where ../ doesn't resolve to the repo, so we must copy here while cwd is the repo root
+          cp zbb.yaml stack/ 2>/dev/null || true
+          cp .zbb.yaml stack/ 2>/dev/null || true
+          mkdir -p stack/test/
+          cp -r test/ stack/test/ 2>/dev/null || true
+          echo "Copied stack artifact files into stack/"
+
+          # Validate the copied zbb.yaml — catch duplicate keys, syntax errors, missing name
           if [ -f "zbb.yaml" ]; then
             node -e "
               const fs = require('fs');

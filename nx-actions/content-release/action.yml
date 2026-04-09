@@ -335,7 +335,7 @@ runs:
           exit 0
         fi
 
-        npm install -g @zerobias-com/platform-schema-ts-generator@latest
+        NPM_TOKEN=$READ_TOKEN npm install -g @zerobias-com/platform-schema-ts-generator@latest
 
         PUBLISHED=0
         for pkg_location in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do

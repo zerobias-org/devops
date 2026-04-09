@@ -144,6 +144,26 @@ runs:
         NPM_TOKEN: ${{ env.READ_TOKEN }}
         ZB_TOKEN: ${{ env.ZB_TOKEN }}
 
+    - name: Prepublish (generate TypeScript packages)
+      if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
+      shell: bash
+      run: |
+        echo "${{ steps.detect_changes.outputs.CHANGED_DIRS }}" | tr ' ' '\n' | \
+        xargs -I{} bash -c '
+          pkg="{}"
+          if [ -f "$pkg/package.json" ]; then
+            PROJECT_NAME=$(jq -r ".name" "$pkg/package.json")
+            if jq -e ".scripts[\"nx:prepublish\"]" "$pkg/package.json" > /dev/null 2>&1; then
+              echo "::group::Prepublish $PROJECT_NAME"
+              timeout ${{ inputs.test-timeout }} nx nx:prepublish "$PROJECT_NAME" || echo "::warning::Prepublish failed for $PROJECT_NAME"
+              echo "::endgroup::"
+            fi
+          fi
+        '
+      env:
+        NPM_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+
     - name: Version packages
       id: version
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'

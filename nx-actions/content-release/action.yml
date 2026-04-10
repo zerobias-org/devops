@@ -316,6 +316,63 @@ runs:
           scripts/postpublish.sh
         fi
 
+    - name: Generate and publish TypeScript schema packages
+      if: steps.version.outputs.HAS_VERSION_CHANGES == 'true' && contains(github.repository, 'schema')
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.publishToken }}
+        READ_TOKEN: ${{ env.READ_TOKEN }}
+        ZB_TOKEN: ${{ env.ZB_TOKEN }}
+      run: |
+        TS_TEMPLATE="libs/utils/ts-schema-package-template"
+        if [ ! -d "$TS_TEMPLATE" ]; then
+          echo "Not a schema repo (no $TS_TEMPLATE) — skipping TS generation"
+          exit 0
+        fi
+
+        if [ -z "$PUBLISHED_PACKAGES_FILE" ] || [ ! -f "$PUBLISHED_PACKAGES_FILE" ]; then
+          echo "No published packages — skipping TS generation"
+          exit 0
+        fi
+
+        NPM_TOKEN=$READ_TOKEN npm install -g @zerobias-com/platform-schema-ts-generator@latest
+
+        PUBLISHED=0
+        for pkg_location in $(jq -r '.[].location' "$PUBLISHED_PACKAGES_FILE"); do
+          if [ ! -f "$pkg_location/package.json" ]; then continue; fi
+
+          DEPRECATED=$(jq -r '(.zerobias // .auditmation).deprecated' "$pkg_location/package.json")
+          if [ "$DEPRECATED" = "true" ]; then continue; fi
+
+          NAME=$(jq -r '.name' "$pkg_location/package.json")
+          VERSION=$(jq -r '.version' "$pkg_location/package.json")
+          TS_NAME="${NAME}-ts"
+
+          echo "::group::TypeScript generation for ${TS_NAME}@${VERSION}"
+
+          TS_DIR="$pkg_location/ts"
+          rm -rf "$TS_DIR"
+          mkdir -p "$TS_DIR"
+          cp "$TS_TEMPLATE/.npmrc" "$TS_DIR" 2>/dev/null || true
+          cp "$TS_TEMPLATE"/* "$TS_DIR"
+
+          if sh "$TS_DIR/generate.sh" "$pkg_location"; then
+            cd "$TS_DIR"
+            jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
+            if [ -f package-lock.json ]; then
+              jq --arg v "$VERSION" '.version = $v | .packages."".version = $v' package-lock.json > tmp.json && mv tmp.json package-lock.json
+            fi
+            npm publish --tag latest && PUBLISHED=$((PUBLISHED + 1))
+            echo "Published ${TS_NAME}@${VERSION}"
+            cd - > /dev/null
+          else
+            echo "::warning::TypeScript generation failed for $NAME"
+          fi
+
+          echo "::endgroup::"
+        done
+        echo "Published $PUBLISHED TypeScript schema packages"
+
     - name: Release Announcement
       if: ${{ inputs.skip-publish-announcement != 'true' && steps.version.outputs.HAS_VERSION_CHANGES == 'true' }}
       uses: zerobias-org/devops/nx-actions/release-announcement@main

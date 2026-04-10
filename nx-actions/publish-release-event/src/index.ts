@@ -41,8 +41,14 @@ async function main() {
       changelog = changelog[0].trim();
     }
 
-    const tags = execSync(`npm view ${name}@${version} dist-tags --json`, { encoding: 'utf8' });
-    const distTags = JSON.parse(tags);
+    let distTags = {};
+    try {
+      const tags = execSync(`npm view ${name}@${version} dist-tags --json`, { encoding: 'utf8' });
+      distTags = JSON.parse(tags);
+    } catch {
+      // Package may not be published yet (skipped, failed, or new)
+      logger.info(`Could not fetch dist-tags for ${name}@${version} — continuing without tags`);
+    }
 
     const message = {
       body: {

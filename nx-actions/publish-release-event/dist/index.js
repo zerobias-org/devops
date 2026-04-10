@@ -38339,8 +38339,14 @@ async function main() {
         if (Array.isArray(changelog)) {
             changelog = changelog[0].trim();
         }
-        const tags = (0, child_process_1.execSync)(`npm view ${name}@${version} dist-tags --json`, { encoding: 'utf8' });
-        const distTags = JSON.parse(tags);
+        let distTags = {};
+        try {
+            const tags = (0, child_process_1.execSync)(`npm view ${name}@${version} dist-tags --json`, { encoding: 'utf8' });
+            distTags = JSON.parse(tags);
+        }
+        catch {
+            logger.info(`Could not fetch dist-tags for ${name}@${version} — continuing without tags`);
+        }
         const message = {
             body: {
                 id: (0, crypto_1.randomUUID)(),

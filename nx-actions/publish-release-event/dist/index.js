@@ -38332,7 +38332,7 @@ async function main() {
         const pkgJson = JSON.parse(node_fs_1.default.readFileSync(node_path_1.default.join(dir, 'package.json'), 'utf-8'));
         const { name, version, zerobias, auditmation } = pkgJson;
         logger.info(`Sending event for ${name}@${version}`);
-        const changelogUrl = `${repository}/${node_path_1.default.relative('../../', dir)}/CHANGELOG.md`;
+        const changelogUrl = `${repository}/blob/main/${dir}/CHANGELOG.md`;
         const changelogPath = node_path_1.default.join(dir, 'CHANGELOG.md');
         const changelogText = node_fs_1.default.existsSync(changelogPath) ? node_fs_1.default.readFileSync(changelogPath, 'utf-8') : '';
         let changelog = changelogText !== '' ? changelogText.match(/^#+ \[[\s\S]+?(?=^#+ \[)/m) : '';

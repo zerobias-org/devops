@@ -30,7 +30,10 @@ async function main() {
     } = pkgJson;
     logger.info(`Sending event for ${name}@${version}`);
 
-    const changelogUrl = `${repository}/${path.relative('../../', dir)}/CHANGELOG.md`
+    // dir is relative to repo root (e.g. "core", "utils/query-builder").
+    // The old lerna flow passed absolute paths, so path.relative('../../', dir)
+    // was needed. With the new monorepo flow, dir is already relative.
+    const changelogUrl = `${repository}/blob/main/${dir}/CHANGELOG.md`
     const changelogPath = path.join(dir, 'CHANGELOG.md');
     const changelogText = fs.existsSync(changelogPath) ? fs.readFileSync(changelogPath, 'utf-8') : ''
     let changelog = changelogText !== '' ? changelogText.match(/^#+ \[[\s\S]+?(?=^#+ \[)/m) : '';

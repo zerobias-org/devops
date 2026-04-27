@@ -94,7 +94,7 @@ jobs:
         uses: zerobias-org/devops/nx-actions/content-validate@main
         with:
           test-timeout: ${{ inputs.test-timeout }}
-          is-fork: 'true'
+          is-fork: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Delete Neon Branch
         if: always()

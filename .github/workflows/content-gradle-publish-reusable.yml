@@ -1,0 +1,209 @@
+name: Content Gradle Publish (reusable)
+
+# Reusable publish workflow for content repos using zb.content (gradle).
+# Shared shape across vendor / suite / product / framework / standard /
+# crosswalk / benchmark / tag — each consumer's publish.yml shrinks to
+# ~10 lines that call this reusable.
+#
+# Each gradle-migrated content repo has:
+#   - root build.gradle.kts that picks a validator from the catalog
+#     (com.zerobias.buildtools.content.validators)
+#   - per-package build.gradle.kts marker: plugins { id("zb.content") }
+#   - settings.gradle.kts that auto-discovers package/** marker files
+#
+# This workflow:
+#   1. detect    — diff against base ref → list changed packages
+#   2. publish   — matrix per package: zbb publish (gate, npm publish,
+#                  promote, release announcement, push)
+#   3. sync      — propagate main → uat → qa → dev (only on main publish)
+
+on:
+  workflow_call:
+    inputs:
+      package-depth:
+        description: |
+          Directory depth from `package/` to the per-package `build.gradle.kts`.
+          1 = package/<code>/build.gradle.kts            (vendor)
+          2 = package/<vendor>/<code>/build.gradle.kts   (tag, suite, product, framework, …)
+        type: number
+        required: true
+      max-parallel:
+        description: |
+          Cap on concurrent matrix entries. 0 = unlimited (GitHub default).
+          Useful workaround for the pushVersion race when a cohort is large
+          and zerobias-org/util#65 (batch finalize) hasn't shipped yet.
+        type: number
+        required: false
+        default: 0
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
+  NEON_PARENT_BRANCH: content-master
+  NEON_DB_ROLE: neondb_owner
+  NEON_DB_NAME: zerobias
+  CI: true
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  # ─── 1. Detect changed packages ────────────────────────────────────
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.changed.outputs.packages }}
+      has_changes: ${{ steps.changed.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Detect changed packages
+        id: changed
+        env:
+          PACKAGE_DEPTH: ${{ inputs.package-depth }}
+        run: |
+          set -euo pipefail
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          if [ "$BRANCH" = "main" ]; then
+            BASE_REF=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          else
+            BASE_REF="origin/main"
+          fi
+
+          # find depth = package-depth + 1 (the package/ root counts as 1)
+          FIND_DEPTH=$((PACKAGE_DEPTH + 1))
+
+          if [ -z "$BASE_REF" ]; then
+            echo "No base ref — treating all packages as changed"
+            FILES=$(find package -mindepth $FIND_DEPTH -maxdepth $FIND_DEPTH -name "build.gradle.kts" 2>/dev/null || true)
+          else
+            FILES=$(git diff --name-only "$BASE_REF" HEAD -- 'package/' || true)
+          fi
+
+          # For each changed file, walk up to the nearest ancestor that
+          # contains a build.gradle.kts. Same shape as auditlogic/module's
+          # detect; works for any depth.
+          PACKAGES="[]"
+          for file in $FILES; do
+            dir="$file"
+            while [ "$dir" != "package" ] && [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+              if [ -f "$dir/build.gradle.kts" ] && [ "$dir" != "package" ]; then
+                rel="${dir#package/}"
+                PACKAGES=$(echo "$PACKAGES" | jq -c --arg p "$rel" 'if index($p) then . else . + [$p] end')
+                break
+              fi
+              dir=$(dirname "$dir")
+            done
+          done
+
+          COUNT=$(echo "$PACKAGES" | jq 'length')
+          echo "Detected $COUNT changed package(s): $PACKAGES"
+          echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "has_changes=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ─── 2. Per-package publish ────────────────────────────────────────
+  publish:
+    needs: detect
+    if: needs.detect.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    env:
+      ZB_SLOT: ci-${{ github.run_id }}-${{ github.run_attempt }}
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ inputs.max-parallel || 256 }}
+      matrix:
+        package: ${{ fromJson(needs.detect.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Authenticate to Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          method: jwt
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/ci/github writePackagesToken | NPM_TOKEN;
+            operations-kv/data/ci/github readPackagesToken  | READ_TOKEN;
+            operations-kv/data/neon/content api-key         | NEON_API_KEY;
+            operations-kv/data/neon/content project-id      | NEON_PROJECT_ID;
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://npm.pkg.github.com'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Configure git user
+        run: |
+          git config --global user.email "ci@neverfail.com"
+          git config --global user.name "@$GITHUB_ACTOR"
+
+      - name: Install global tools
+        run: |
+          cp .npmrc $HOME/.npmrc
+          cp .npmrc $NPM_CONFIG_USERCONFIG
+          npm i -g @zerobias-org/zbb
+          npm i -g @zerobias-com/platform-dataloader
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Bootstrap zbb slot
+        run: |
+          zbb slot create $ZB_SLOT --ephemeral
+          zbb stack add .
+
+      - name: Publish ${{ matrix.package }}
+        run: |
+          cd "package/${{ matrix.package }}"
+          zbb publish
+
+      - name: Generate packages file for release announcement
+        if: success()
+        run: |
+          cd "package/${{ matrix.package }}"
+          VERSION=$(node -p "require('./package.json').version")
+          NAME=$(node -p "require('./package.json').name")
+          echo "[{\"name\":\"$NAME\",\"version\":\"$VERSION\",\"location\":\"$(pwd)\"}]" > /tmp/published-packages.json
+
+      - name: Release Announcement
+        if: success()
+        uses: zerobias-org/devops/nx-actions/release-announcement@main
+        with:
+          packages-file: /tmp/published-packages.json
+          branch: ${{ github.ref_name }}
+          dist-tag: ${{ github.ref_name == 'main' && 'latest' || github.ref_name == 'qa' && 'qa' || github.ref_name == 'dev' && 'dev' || 'uat' }}
+        env:
+          SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
+          SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
+
+  # ─── 3. Sync env branches after main ───────────────────────────────
+  sync:
+    needs: publish
+    if: github.ref == 'refs/heads/main' && needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: zerobias-org/devops/nx-actions/sync-branches@main
+        with:
+          branch: ${{ github.ref_name }}

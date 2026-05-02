@@ -1,0 +1,439 @@
+name: ZBB Publish (reusable)
+
+# Reusable publish workflow for any repo that uses zbb + gradle to publish
+# packages from a `package/**` tree. ZBB itself decides what gets built and
+# pushed for a given package (npm, docker image, hub-sdk sibling, etc.) —
+# this workflow only owns the orchestration: detect changed packages,
+# single-writer version bump, fan out per-package publish, sync env branches.
+#
+# Consumers today: auditlogic/module, zerobias-org/module. Same shape
+# applies to vendor / suite / product / framework / collectorbot / … as
+# they migrate onto zbb publish; pick the right `package-depth` and the
+# rest is identical.
+#
+# Job graph:
+#   1. detect    — diff against base ref → list changed packages
+#   2. version   — single-writer: bump every changed package + push ONE
+#                  commit, before the matrix fans out. Eliminates the
+#                  pushVersion race on cohorts > 1.
+#   3. publish   — matrix per package: zbb publish (preflight, build,
+#                  publish npm, publish image if applicable, tag, push,
+#                  release announcement).
+#   4. sync      — propagate main → uat → qa → dev (only on main publish).
+
+on:
+  workflow_call:
+    inputs:
+      package-depth:
+        description: |
+          Directory depth from `package/` to the per-package
+          `build.gradle.kts`.
+          1 = package/<code>/build.gradle.kts            (vendor)
+          2 = package/<vendor>/<code>/build.gradle.kts   (module, suite,
+                                                          product, framework,
+                                                          collectorbot, …)
+        type: number
+        required: true
+      ghcr-namespace:
+        description: |
+          GHCR namespace for image publishes (e.g. `auditlogic`,
+          `zerobias-org`). Exposed to zbb as GHCR_REGISTRY=ghcr.io/<ns>.
+          Required even for repos that don't push images today — zbb
+          decides per-package whether the image step runs.
+        type: string
+        required: true
+      ecr-registry:
+        description: ECR registry hostname for image publishes.
+        type: string
+        required: false
+        default: '961260934100.dkr.ecr.us-east-1.amazonaws.com'
+      aws-region:
+        description: AWS region for ECR auth.
+        type: string
+        required: false
+        default: 'us-east-1'
+      max-parallel:
+        description: |
+          Cap on concurrent matrix entries. 0 = unlimited (GitHub default).
+          Useful escape hatch if a cohort overwhelms a downstream system
+          even with the single-writer version job in place.
+        type: number
+        required: false
+        default: 0
+      dispatch-input-name:
+        description: |
+          Name of the workflow_dispatch input the caller exposes for
+          targeting a single package (e.g. `module`, `vendor`). The
+          consumer workflow declares the input and forwards its value
+          via `dispatch-input-value`. Used only for log clarity.
+        type: string
+        required: false
+        default: 'package'
+      dispatch-input-value:
+        description: |
+          Value of the consumer's workflow_dispatch input. When non-empty,
+          detect short-circuits to a single-package matrix.
+        type: string
+        required: false
+        default: ''
+      skip-sync:
+        description: |
+          Skip the post-publish branch sync step (main → uat → qa → dev).
+          Set to true when the consumer needs to interleave repo-specific
+          steps (e.g. refreshing a tracker file) on main before sync runs;
+          the consumer is then responsible for invoking
+          zerobias-org/devops/nx-actions/sync-branches itself.
+        type: boolean
+        required: false
+        default: false
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
+  AWS_REGION: ${{ inputs.aws-region }}
+  ECR_REGISTRY: ${{ inputs.ecr-registry }}
+  GHCR_REGISTRY: ghcr.io/${{ inputs.ghcr-namespace }}
+  NEON_PARENT_BRANCH: content-master
+  NEON_DB_ROLE: neondb_owner
+  NEON_DB_NAME: zerobias
+  CI: true
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  # ─── 1. Detect changed packages ────────────────────────────────────
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.changed.outputs.packages }}
+      has_changes: ${{ steps.changed.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Detect changed packages
+        id: changed
+        env:
+          PACKAGE_DEPTH: ${{ inputs.package-depth }}
+          DISPATCH_VALUE: ${{ inputs.dispatch-input-value }}
+          DISPATCH_NAME: ${{ inputs.dispatch-input-name }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "$DISPATCH_VALUE" ]; then
+            echo "Manual dispatch ($DISPATCH_NAME=$DISPATCH_VALUE)"
+            PACKAGES=$(jq -c -n --arg p "$DISPATCH_VALUE" '[$p]')
+            echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
+            echo "has_changes=true"   >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          FIND_DEPTH=$((PACKAGE_DEPTH + 1))
+
+          if [ "$BRANCH" = "main" ]; then
+            BASE_REF=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -z "$BASE_REF" ]; then
+              echo "No tags found — treating all packages as changed"
+              PACKAGES=$(find package -mindepth $FIND_DEPTH -maxdepth $FIND_DEPTH -name "build.gradle.kts" 2>/dev/null | \
+                sed 's|^package/||; s|/build.gradle.kts||' | \
+                jq -R -s -c 'split("\n") | map(select(length > 0))')
+              echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
+              echo "has_changes=true"   >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          else
+            BASE_REF="origin/main"
+          fi
+
+          echo "Comparing against: $BASE_REF"
+
+          # Walk each changed file up to the nearest ancestor with a
+          # build.gradle.kts. Works for any package-depth.
+          PACKAGES="[]"
+          for file in $(git diff --name-only "$BASE_REF" HEAD -- 'package/' || true); do
+            dir="$file"
+            while [ "$dir" != "package" ] && [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+              dir=$(dirname "$dir")
+              if [ -f "$dir/build.gradle.kts" ] && [ "$dir" != "package" ]; then
+                rel="${dir#package/}"
+                PACKAGES=$(echo "$PACKAGES" | jq -c --arg p "$rel" 'if index($p) then . else . + [$p] end')
+                break
+              fi
+            done
+          done
+
+          COUNT=$(echo "$PACKAGES" | jq 'length')
+          echo "Detected $COUNT changed package(s): $PACKAGES"
+          echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "has_changes=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ─── 2. Single-writer version bump (main only) ─────────────────────
+  # Bumps every changed package's package.json + gate-stamp.json in ONE
+  # commit and pushes once, BEFORE the publish matrix fans out. Without
+  # this, every matrix job races on `git push` to main. Outputs the
+  # resulting SHA so the matrix checks out the bumped state.
+  version:
+    needs: detect
+    if: needs.detect.outputs.has_changes == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      # Ephemeral slot for the version step. zbb lifecycle commands
+      # require a loaded slot; this slot only needs npm registry tokens
+      # (no ECR/Neon).
+      ZB_SLOT: ci-version-${{ github.run_id }}-${{ github.run_attempt }}
+    outputs:
+      sha: ${{ steps.bump.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Vault auth — only the npm tokens. Version step does not push
+      # images or hit Neon, so ECR/AWS/Neon secrets aren't needed here.
+      - name: Authenticate to Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          method: jwt
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/ci/github writePackagesToken | NPM_TOKEN;
+            operations-kv/data/ci/github readPackagesToken  | READ_TOKEN;
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://npm.pkg.github.com'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Configure git user
+        run: |
+          git config --global user.email "ci@neverfail.com"
+          git config --global user.name "@$GITHUB_ACTOR"
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Install global tools
+        run: |
+          # setup-node writes its own .npmrc to $NPM_CONFIG_USERCONFIG
+          # that points at GitHub Packages. The repo .npmrc routes
+          # @zerobias-org to pkg.zerobias.org (where zbb lives) — copy
+          # to BOTH locations so npm picks it up regardless of which
+          # path it reads.
+          cp .npmrc $HOME/.npmrc
+          cp .npmrc $NPM_CONFIG_USERCONFIG
+          npm i -g @zerobias-org/zbb
+          # zbb's preflight requires platform-dataloader >=1.0.87
+          # globally
+          npm i -g @zerobias-com/platform-dataloader
+
+      - name: Bootstrap zbb slot
+        run: |
+          zbb slot create $ZB_SLOT --ephemeral
+          zbb stack add .
+
+      - name: Bump versions
+        id: bump
+        run: |
+          # detect emits a JSON array (["foo/bar","baz/qux"]); zbb
+          # expects a comma-separated list.
+          PACKAGES=$(echo '${{ needs.detect.outputs.packages }}' | jq -r 'join(",")')
+          echo "Versioning: $PACKAGES"
+          zbb version --modules="$PACKAGES"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  # ─── 3. Per-package publish ────────────────────────────────────────
+  publish:
+    needs: [detect, version]
+    # version is skipped on non-main branches; in that case we still
+    # want publish to run, so guard on the always() + has_changes pair.
+    if: |
+      always() &&
+      needs.detect.outputs.has_changes == 'true' &&
+      (needs.version.result == 'success' || needs.version.result == 'skipped')
+    runs-on: ubuntu-latest
+    env:
+      ZB_SLOT: ci-${{ github.run_id }}-${{ github.run_attempt }}
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ inputs.max-parallel || 256 }}
+      matrix:
+        package: ${{ fromJson(needs.detect.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Pick up the version-bump commit produced by the `version`
+          # job. On non-main branches the version job is skipped, so
+          # fall back to the triggering ref.
+          ref: ${{ needs.version.outputs.sha || github.sha }}
+
+      # The checkout above lands in detached-HEAD state when given a
+      # SHA. zb.base.gradle.kts reads `git rev-parse --abbrev-ref HEAD`
+      # to decide whether the publish flow is running on main —
+      # detached HEAD returns the literal "HEAD", which makes
+      # bumpVersion / commitVersion / publishNpmExec / publishHubSdkExec
+      # all skip with the wrong branch gate AND triggers a `-uat.0`
+      # pre-release suffix from the non-main path. Recreate the local
+      # branch so gradle sees the right name.
+      - name: Restore branch name
+        run: git checkout -B "${{ github.ref_name }}"
+
+      - name: Authenticate to Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          method: jwt
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/ci/github writePackagesToken | NPM_TOKEN;
+            operations-kv/data/ci/github readPackagesToken  | READ_TOKEN;
+            aws-auth/tools/ecr/creds/ecr-push access_key    | AWS_ACCESS_KEY_ID;
+            aws-auth/tools/ecr/creds/ecr-push secret_key    | AWS_SECRET_ACCESS_KEY;
+            operations-kv/data/neon/content api-key         | NEON_API_KEY;
+            operations-kv/data/neon/content project-id      | NEON_PROJECT_ID;
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://npm.pkg.github.com'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Configure git user
+        run: |
+          git config --global user.email "ci@neverfail.com"
+          git config --global user.name "@$GITHUB_ACTOR"
+
+      # AWS IAM eventual consistency: freshly generated credentials may
+      # take a few seconds to propagate. Retry with backoff.
+      - name: Login to ECR
+        run: |
+          for i in 1 2 3 4 5; do
+            aws ecr get-login-password --region "$AWS_REGION" | \
+              docker login --username AWS --password-stdin "$ECR_REGISTRY" && break
+            echo "ECR login attempt $i failed — waiting ${i}0s for IAM propagation..."
+            sleep ${i}0
+          done
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ env.NPM_TOKEN }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+          platforms: linux/amd64,linux/arm64
+          install: true
+
+      - name: Bootstrap buildx
+        run: docker buildx inspect --bootstrap
+
+      - name: Install global tools
+        run: |
+          cp .npmrc $HOME/.npmrc
+          cp .npmrc $NPM_CONFIG_USERCONFIG
+          npm i -g @zerobias-org/zbb
+          npm i -g @zerobias-com/platform-dataloader
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Install dependencies
+        run: |
+          cd "package/${{ matrix.package }}"
+          cp $HOME/.npmrc .npmrc
+          npm ci
+
+      # Bootstrap an ephemeral slot for this CI run. CI mode
+      # (auto-detected from CI=true) snapshots process.env as slot
+      # overrides — vault secrets exported above are picked up directly.
+      # IMPORTANT: do NOT override NPM_TOKEN here — vault exported the
+      # WRITE token as NPM_TOKEN. Overriding it with READ_TOKEN would
+      # snapshot the read token into the slot, and prepareSlot() would
+      # re-export it over the write token during publish.
+      - name: Bootstrap zbb slot
+        run: |
+          zbb slot create $ZB_SLOT --ephemeral
+          zbb stack add .
+
+      # versionAlreadyCommitted=true: the `version` job already wrote
+      # and pushed the version-bump commit, so commitVersion /
+      # pushVersion in this matrix run are no-ops. tagVersion + pushTag
+      # still fire per-matrix because each tag is a unique ref → no
+      # race on tag push. On non-main branches the flag has no effect
+      # (no version commit happens there).
+      - name: Publish ${{ matrix.package }}
+        run: |
+          cd "package/${{ matrix.package }}"
+          zbb publish -PversionAlreadyCommitted=true
+
+      # zbb publish writes /tmp/published-packages.json itself when it
+      # runs the release-event task — it knows about hub-sdk siblings
+      # and any other co-published artifacts. If the file is missing
+      # (older zbb, or a publish path that doesn't emit it), fall back
+      # to the package's own name+version.
+      - name: Generate packages file (fallback)
+        if: success()
+        run: |
+          if [ -f /tmp/published-packages.json ]; then
+            echo "Using packages file emitted by zbb"
+            exit 0
+          fi
+          cd "package/${{ matrix.package }}"
+          VERSION=$(node -p "require('./package.json').version")
+          NAME=$(node -p "require('./package.json').name")
+          echo "[{\"name\":\"$NAME\",\"version\":\"$VERSION\",\"location\":\"$(pwd)\"}]" > /tmp/published-packages.json
+
+      - name: Release Announcement
+        if: success()
+        uses: zerobias-org/devops/nx-actions/release-announcement@main
+        with:
+          packages-file: /tmp/published-packages.json
+          branch: ${{ github.ref_name }}
+          dist-tag: ${{ github.ref_name == 'main' && 'latest' || github.ref_name == 'qa' && 'rc' || github.ref_name == 'dev' && 'dev' || 'uat' }}
+        env:
+          SLACK_RELEASES_WEBHOOK: ${{ secrets.SLACK_RELEASES_WEBHOOK }}
+          SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
+          READ_TOKEN: ${{ env.READ_TOKEN }}
+
+  # ─── 4. Sync env branches after main ───────────────────────────────
+  sync:
+    needs: publish
+    if: |
+      github.ref == 'refs/heads/main' &&
+      needs.publish.result == 'success' &&
+      inputs.skip-sync != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: zerobias-org/devops/nx-actions/sync-branches@main
+        with:
+          branch: ${{ github.ref_name }}

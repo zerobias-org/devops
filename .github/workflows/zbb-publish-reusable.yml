@@ -105,7 +105,16 @@ permissions:
 
 jobs:
   # ─── 1. Detect changed packages ────────────────────────────────────
+  # Skip self-triggered runs from the version job's commit. zbb's version
+  # task pushes a `chore(release): …` commit that touches package.json +
+  # gate-stamp.json under `package/**`, which would otherwise re-trigger
+  # this workflow and create an infinite bump loop. (Belt-and-suspenders
+  # with any zbb-side `[skip ci]` marker.)
   detect:
+    if: |
+      github.event_name != 'push' ||
+      github.event.head_commit == null ||
+      !startsWith(github.event.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.changed.outputs.packages }}
@@ -120,6 +129,7 @@ jobs:
           PACKAGE_DEPTH: ${{ inputs.package-depth }}
           DISPATCH_VALUE: ${{ inputs.dispatch-input-value }}
           DISPATCH_NAME: ${{ inputs.dispatch-input-name }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
 
@@ -133,20 +143,43 @@ jobs:
 
           BRANCH="${GITHUB_REF#refs/heads/}"
           FIND_DEPTH=$((PACKAGE_DEPTH + 1))
+          ZERO_SHA="0000000000000000000000000000000000000000"
 
-          if [ "$BRANCH" = "main" ]; then
-            BASE_REF=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-            if [ -z "$BASE_REF" ]; then
-              echo "No tags found — treating all packages as changed"
-              PACKAGES=$(find package -mindepth $FIND_DEPTH -maxdepth $FIND_DEPTH -name "build.gradle.kts" 2>/dev/null | \
-                sed 's|^package/||; s|/build.gradle.kts||' | \
-                jq -R -s -c 'split("\n") | map(select(length > 0))')
-              echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
-              echo "has_changes=true"   >> "$GITHUB_OUTPUT"
-              exit 0
+          # Pick the diff baseline:
+          #   - Push events: use github.event.before (the SHA the branch
+          #     pointed at before this push). That's the natural "what did
+          #     THIS push touch" baseline. Previously we used
+          #     `git describe --tags --abbrev=0`, which returned the most-
+          #     recent monorepo-wide tag regardless of which package owned
+          #     it — every package with commits since that tag got a
+          #     wasteful publish job.
+          #   - Force-push / branch-create: event.before is the pre-force
+          #     SHA (which may no longer exist) or all-zeros. Verify it's
+          #     reachable; if not, fall back to the branch policy below.
+          #   - workflow_dispatch with no input: event.before is empty.
+          #     Fall back to the branch policy.
+          BASE_REF=""
+          if [ -n "${PUSH_BEFORE_SHA:-}" ] && [ "$PUSH_BEFORE_SHA" != "$ZERO_SHA" ]; then
+            if git cat-file -e "$PUSH_BEFORE_SHA^{commit}" 2>/dev/null; then
+              BASE_REF="$PUSH_BEFORE_SHA"
+            else
+              echo "event.before=$PUSH_BEFORE_SHA not reachable (force-push?) — falling back"
             fi
-          else
-            BASE_REF="origin/main"
+          fi
+
+          if [ -z "$BASE_REF" ]; then
+            if [ "$BRANCH" = "main" ]; then
+              # No reliable baseline on main — refuse to guess. Manual
+              # dispatch with a package input is the escape hatch.
+              echo "No baseline available on main — publishing nothing"
+              echo "packages=[]"        >> "$GITHUB_OUTPUT"
+              echo "has_changes=false"  >> "$GITHUB_OUTPUT"
+              exit 0
+            else
+              # Non-main: compare against main. Useful when a feature
+              # branch should publish everything that diverges from main.
+              BASE_REF="origin/main"
+            fi
           fi
 
           echo "Comparing against: $BASE_REF"

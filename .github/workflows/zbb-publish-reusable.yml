@@ -26,14 +26,16 @@ on:
     inputs:
       package-depth:
         description: |
-          Directory depth from `package/` to the per-package
-          `build.gradle.kts`.
-          1 = package/<code>/build.gradle.kts            (vendor)
-          2 = package/<vendor>/<code>/build.gradle.kts   (module, suite,
-                                                          product, framework,
-                                                          collectorbot, …)
+          DEPRECATED — vestigial input, kept for backwards compatibility
+          with existing consumers that still pass it. The detect job no
+          longer uses this value: it walks UP from any changed file to
+          the nearest `build.gradle.kts`, which works at any depth and
+          handles mixed-depth repos (e.g. product, where some packages
+          are vendor-parented at depth 2 and others are suite-parented
+          at depth 3). New consumers should omit this input. A future
+          cleanup will remove it once all consumers stop passing it.
         type: number
-        required: true
+        required: false
       ghcr-namespace:
         description: |
           GHCR namespace for image publishes (e.g. `auditlogic`,
@@ -126,7 +128,6 @@ jobs:
       - name: Detect changed packages
         id: changed
         env:
-          PACKAGE_DEPTH: ${{ inputs.package-depth }}
           DISPATCH_VALUE: ${{ inputs.dispatch-input-value }}
           DISPATCH_NAME: ${{ inputs.dispatch-input-name }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
@@ -142,7 +143,6 @@ jobs:
           fi
 
           BRANCH="${GITHUB_REF#refs/heads/}"
-          FIND_DEPTH=$((PACKAGE_DEPTH + 1))
           ZERO_SHA="0000000000000000000000000000000000000000"
 
           # Pick the diff baseline:

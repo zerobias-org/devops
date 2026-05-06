@@ -24,18 +24,6 @@ name: ZBB Publish (reusable)
 on:
   workflow_call:
     inputs:
-      package-depth:
-        description: |
-          DEPRECATED — vestigial input, kept for backwards compatibility
-          with existing consumers that still pass it. The detect job no
-          longer uses this value: it walks UP from any changed file to
-          the nearest `build.gradle.kts`, which works at any depth and
-          handles mixed-depth repos (e.g. product, where some packages
-          are vendor-parented at depth 2 and others are suite-parented
-          at depth 3). New consumers should omit this input. A future
-          cleanup will remove it once all consumers stop passing it.
-        type: number
-        required: false
       ghcr-namespace:
         description: |
           GHCR namespace for image publishes (e.g. `auditlogic`,

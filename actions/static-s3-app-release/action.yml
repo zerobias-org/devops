@@ -25,6 +25,10 @@ inputs:
     description: 'Overrides the folder name inside the bucket'
     required: false
     default: ''
+  cloudfront-distribution-id:
+    description: 'CloudFront distribution ID to invalidate after deploy. If not provided, invalidation is skipped.'
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -72,3 +76,19 @@ runs:
       shell: bash
       run: |
         aws s3 sync ${{ env.APP_PATH }}/dist s3://${{ inputs.s3-bucket }}/${{ env.BUCKET_PATH }} --delete
+
+    - name: Invalidate CloudFront cache
+      if: inputs.cloudfront-distribution-id != ''
+      shell: bash
+      run: |
+        INVALIDATION_ID=$(aws cloudfront create-invalidation \
+          --distribution-id "${{ inputs.cloudfront-distribution-id }}" \
+          --paths "/${{ env.BUCKET_PATH }}/*" \
+          --query 'Invalidation.Id' \
+          --output text)
+
+        echo "Waiting for invalidation $INVALIDATION_ID to complete..."
+        aws cloudfront wait invalidation-completed \
+          --distribution-id "${{ inputs.cloudfront-distribution-id }}" \
+          --id "$INVALIDATION_ID"
+        echo "CloudFront invalidation completed."

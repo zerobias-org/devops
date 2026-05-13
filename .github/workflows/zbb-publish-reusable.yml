@@ -448,16 +448,6 @@ jobs:
           READ_TOKEN: ${{ env.READ_TOKEN }}
 
   # ─── 4. Refresh bundle/package.json on successful main publish ─────
-  #
-  # No-ops for repos without bundle/package.json (hub today; module +
-  # collectorbot to follow). For repos with a bundle, the action
-  # queries npm for each per-package version, rebuilds the bundle's
-  # deps map, bumps bundle's patch version if anything drifted, then
-  # commits + npm-publishes the bundle.
-  #
-  # Race-safe push handled inside the action — the version job in the
-  # `version` job above commits to main in parallel with the publish
-  # matrix, so a straight push would be rejected non-fast-forward.
   update-bundle:
     needs: publish
     if: |
@@ -476,12 +466,8 @@ jobs:
         with:
           npm-token: ${{ secrets.GITHUB_TOKEN }}
 
-  # ─── 5. Sync env branches after main ───────────────────────────────
-  #
-  # Runs after both publish AND update-bundle so propagated branches
-  # (uat/qa/dev) include the bundle-refresh commit. update-bundle
-  # no-ops for repos without bundles, so the extra dependency only
-  # adds the cost of one queued job that completes in seconds.
+  # ─── 5. Sync env branches — runs after update-bundle so propagated
+  # branches include the bundle-refresh commit.
   sync:
     needs: [publish, update-bundle]
     if: |

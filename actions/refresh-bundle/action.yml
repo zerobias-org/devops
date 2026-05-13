@@ -1,62 +1,43 @@
 name: 'Refresh Bundle'
 description: |
   Refreshes <repo>/bundle/package.json's dependencies map from the npm
-  registry (so failed publishes don't get pinned at phantom versions),
-  bumps the bundle's patch version if the dep set changed, commits the
-  change, and `npm publish`es the bundle.
+  registry, bumps the bundle's patch version if anything changed, and
+  publishes the bundle to npm.
 
-  No-ops cleanly when:
-    - bundle/package.json does not exist (repo has no bundle yet)
-    - npm-published versions match what's already in bundle/package.json
+  No-ops when bundle/package.json is absent, or when no dep versions
+  differ from what's already in the bundle.
 
-  Designed to be wired into the publish flow as `needs: publish`,
-  running only when ALL matrix entries succeeded and only on main.
-
-  Replaces the legacy `content-bundle` action's lerna-list source of
-  truth — that path was vulnerable to publish-failure version skew
-  because it read versions from on-disk package.json (which the
-  version-bump commit updates *before* publish actually succeeds).
+  Versions are read from npm (not on-disk package.json) so packages
+  whose publish failed in the matrix do not get pinned at versions
+  that never reached the registry.
 
 inputs:
   registry-url:
-    description: |
-      npm registry to publish the bundle to and to query for current
-      package versions. Default matches GH Packages where every
-      gradle-pipeline content artifact publishes today.
+    description: 'npm registry for publish + version queries.'
     required: false
     default: 'https://npm.pkg.github.com/'
   npm-token:
-    description: |
-      Write-scope npm token for publishing the bundle.
-      Also used to read package versions during the diff.
+    description: 'Write-scope npm token for publishing the bundle.'
     required: true
   dist-tag:
-    description: |
-      Dist-tag to assign on `npm publish`. Bundle is meta — keeping
-      `latest` keeps the design tight. Override per repo if needed.
+    description: 'Dist-tag for `npm publish`.'
     required: false
     default: 'latest'
   package-glob:
-    description: |
-      Glob (relative to repo root) for locating per-package
-      package.json files whose names + npm versions populate the
-      bundle. Default matches every gradle-migrated content repo.
+    description: 'Glob (relative to repo root) for per-package package.json files.'
     required: false
     default: 'package/**/package.json'
   commit-message-prefix:
-    description: |
-      Prefix for the auto-generated commit message. The action appends
-      `(<new-version>) [skip ci]` to match the convention that prevents
-      the bundle-update commit from re-triggering the same workflow.
+    description: 'Prefix for the auto-generated commit message.'
     required: false
     default: 'chore(bundle): refresh deps'
 
 outputs:
   bundle-changed:
-    description: '"true" if deps changed and a new bundle version was published; "false" otherwise.'
+    description: '"true" when a new bundle version was published; "false" otherwise.'
     value: ${{ steps.refresh.outputs.bundle-changed }}
   bundle-version:
-    description: 'The newly-published bundle version (when bundle-changed=true).'
+    description: 'Newly-published bundle version when bundle-changed=true.'
     value: ${{ steps.refresh.outputs.bundle-version }}
 
 runs:
@@ -74,26 +55,15 @@ runs:
       run: |
         set -euo pipefail
 
-        # Bail clean if this repo has no bundle.
         if [ ! -f bundle/package.json ]; then
           echo "no bundle/package.json — skipping"
           echo "bundle-changed=false" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        # Authenticate the registry for npm view + npm publish.
-        # The action consumer's .npmrc handles scope routing; we only
-        # need the auth token on the host npmrc.
         echo "//$(echo "$REGISTRY_URL" | sed -E 's|^https?://||; s|/$||')/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
 
-        # Build the deps map: for each per-package package.json on disk,
-        # query npm for the CURRENTLY PUBLISHED version. Skip packages
-        # that npm has never heard of. Failed-publish case: npm still
-        # has the prior version, so the bundle pins the prior version
-        # automatically — no phantom entries from on-disk version bumps
-        # that never reached the registry.
         new_deps=$(jq -n '{}')
-        # shellcheck disable=SC2086
         for pkg_json in $(find . -path "./$PACKAGE_GLOB" -not -path "*/node_modules/*" -not -path "*/ts/*" | sort); do
           name=$(jq -r '.name // empty' "$pkg_json")
           [ -z "$name" ] && continue
@@ -105,8 +75,6 @@ runs:
           new_deps=$(echo "$new_deps" | jq --arg n "$name" --arg v "$version" '. + {($n): $v}')
         done
 
-        # Diff against current bundle/package.json.
-        # Sort keys for stable comparison.
         current=$(jq -S '.dependencies // {}' bundle/package.json)
         new_sorted=$(echo "$new_deps" | jq -S '.')
         if [ "$current" = "$new_sorted" ]; then
@@ -115,25 +83,24 @@ runs:
           exit 0
         fi
 
-        # Bump bundle's patch version + write new deps.
         old_version=$(jq -r '.version' bundle/package.json)
         IFS=. read -r maj min pat <<< "$old_version"
         new_version="${maj}.${min}.$((pat + 1))"
-        echo "bundle: $old_version → $new_version (deps drift detected)"
+        echo "bundle: $old_version → $new_version"
 
         jq --arg v "$new_version" --argjson deps "$new_deps" \
           '.version = $v | .dependencies = $deps' \
           bundle/package.json > bundle/package.json.tmp
         mv bundle/package.json.tmp bundle/package.json
 
-        # Commit + race-safe push. The reusable workflow's version job
-        # commits version bumps to main in parallel with our publish
-        # matrix, so a straight push gets rejected non-fast-forward.
-        # Rebase the bundle commit onto whatever just landed and retry.
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add bundle/package.json
         git commit -m "${COMMIT_PREFIX} (${new_version}) [skip ci]"
+
+        # Race-safe push: the version job in the parent workflow commits
+        # bumps to main in parallel with our matrix, so a straight push
+        # can be rejected non-fast-forward.
         for attempt in 1 2 3; do
           git fetch origin main
           if git rebase origin/main; then
@@ -151,7 +118,6 @@ runs:
           sleep $((attempt * 5))
         done
 
-        # npm publish from bundle/. Token already on $HOME/.npmrc.
         (cd bundle && npm publish --tag "$DIST_TAG" --registry "$REGISTRY_URL")
 
         echo "bundle-changed=true" >> "$GITHUB_OUTPUT"

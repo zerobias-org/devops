@@ -472,7 +472,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
-      - uses: zerobias-org/devops/nx-actions/refresh-bundle@main
+      - uses: zerobias-org/devops/actions/refresh-bundle@main
         with:
           npm-token: ${{ secrets.GITHUB_TOKEN }}
 

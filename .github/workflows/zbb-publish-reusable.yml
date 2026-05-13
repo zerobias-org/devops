@@ -447,9 +447,43 @@ jobs:
           SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
           READ_TOKEN: ${{ env.READ_TOKEN }}
 
-  # ─── 4. Sync env branches after main ───────────────────────────────
-  sync:
+  # ─── 4. Refresh bundle/package.json on successful main publish ─────
+  #
+  # No-ops for repos without bundle/package.json (hub today; module +
+  # collectorbot to follow). For repos with a bundle, the action
+  # queries npm for each per-package version, rebuilds the bundle's
+  # deps map, bumps bundle's patch version if anything drifted, then
+  # commits + npm-publishes the bundle.
+  #
+  # Race-safe push handled inside the action — the version job in the
+  # `version` job above commits to main in parallel with the publish
+  # matrix, so a straight push would be rejected non-fast-forward.
+  update-bundle:
     needs: publish
+    if: |
+      github.ref == 'refs/heads/main' &&
+      needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+      - uses: zerobias-org/devops/nx-actions/refresh-bundle@main
+        with:
+          npm-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─── 5. Sync env branches after main ───────────────────────────────
+  #
+  # Runs after both publish AND update-bundle so propagated branches
+  # (uat/qa/dev) include the bundle-refresh commit. update-bundle
+  # no-ops for repos without bundles, so the extra dependency only
+  # adds the cost of one queued job that completes in seconds.
+  sync:
+    needs: [publish, update-bundle]
     if: |
       github.ref == 'refs/heads/main' &&
       needs.publish.result == 'success' &&

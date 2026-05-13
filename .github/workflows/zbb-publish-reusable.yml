@@ -390,10 +390,16 @@ jobs:
         run: chmod +x gradlew
 
       - name: Install dependencies
+        # --no-workspaces avoids walking up to the repo's workspaces
+        # declaration in root package.json — that walk forces npm to
+        # validate the whole workspace lockfile, which can be out of
+        # sync (e.g. vendor's root lockfile lacks entries for many
+        # workspace packages). Per-package install only needs that
+        # package's own deps.
         run: |
           cd "package/${{ matrix.package }}"
           cp $HOME/.npmrc .npmrc
-          npm ci
+          npm install --no-workspaces --no-audit --no-fund --silent
 
       # Bootstrap an ephemeral slot for this CI run. CI mode
       # (auto-detected from CI=true) snapshots process.env as slot

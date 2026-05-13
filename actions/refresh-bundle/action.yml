@@ -75,25 +75,6 @@ runs:
           new_deps=$(echo "$new_deps" | jq --arg n "$name" --arg v "$version" '. + {($n): $v}')
         done
 
-        bundle_name=$(jq -r '.name' bundle/package.json)
-        on_disk_version=$(jq -r '.version' bundle/package.json)
-        published_version=$(npm view "$bundle_name" version --registry="$REGISTRY_URL" 2>/dev/null || echo "")
-
-        # Manual major-bump path: commit pushed a version higher than what's
-        # on npm. Publish that version verbatim (deps as-is). Skip auto-bump
-        # so a minor patch-bump doesn't shadow the intended major.
-        if [ -n "$published_version" ] && [ "$on_disk_version" != "$published_version" ]; then
-          highest=$(printf '%s\n%s\n' "$on_disk_version" "$published_version" | sort -V | tail -1)
-          if [ "$highest" = "$on_disk_version" ]; then
-            echo "manual version bump detected: $published_version → $on_disk_version"
-            echo "publishing $bundle_name@$on_disk_version verbatim (no dep refresh)"
-            (cd bundle && npm publish --tag "$DIST_TAG" --registry "$REGISTRY_URL")
-            echo "bundle-changed=true" >> "$GITHUB_OUTPUT"
-            echo "bundle-version=${on_disk_version}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-        fi
-
         current=$(jq -S '.dependencies // {}' bundle/package.json)
         new_sorted=$(echo "$new_deps" | jq -S '.')
         if [ "$current" = "$new_sorted" ]; then
@@ -102,7 +83,7 @@ runs:
           exit 0
         fi
 
-        old_version="$on_disk_version"
+        old_version=$(jq -r '.version' bundle/package.json)
         IFS=. read -r maj min pat <<< "$old_version"
         new_version="${maj}.${min}.$((pat + 1))"
         echo "bundle: $old_version → $new_version"

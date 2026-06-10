@@ -326,6 +326,7 @@ jobs:
           secrets: |
             operations-kv/data/ci/github writePackagesToken | NPM_TOKEN;
             operations-kv/data/ci/github readPackagesToken  | READ_TOKEN;
+            operations-kv/data/ci/github dispatchToken      | DISPATCH_TOKEN;
             aws-auth/tools/ecr/creds/ecr-push access_key    | AWS_ACCESS_KEY_ID;
             aws-auth/tools/ecr/creds/ecr-push secret_key    | AWS_SECRET_ACCESS_KEY;
             operations-kv/data/neon/content api-key         | NEON_API_KEY;

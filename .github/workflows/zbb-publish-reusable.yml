@@ -212,7 +212,9 @@ jobs:
           set -euo pipefail
           HAS=false
           for rel in $(echo "$PACKAGES" | jq -r '.[]'); do
-            if ls "package/$rel"/logo.png "package/$rel"/logo.svg >/dev/null 2>&1; then
+            # test each file independently — `ls a b` exits non-zero when
+            # EITHER is missing, which false-negatived png-only packages.
+            if [ -f "package/$rel/logo.png" ] || [ -f "package/$rel/logo.svg" ]; then
               HAS=true; break
             fi
           done

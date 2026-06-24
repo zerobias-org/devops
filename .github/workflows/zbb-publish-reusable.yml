@@ -109,6 +109,10 @@ jobs:
     outputs:
       packages: ${{ steps.changed.outputs.packages }}
       has_changes: ${{ steps.changed.outputs.has_changes }}
+      # True only when a changed package dir carries a logo file. Lets the
+      # cdn-update job skip entirely on non-VSP repos (framework/crosswalk/
+      # standard/module/tag have no logos), so it doesn't spin a no-op job.
+      has_logos: ${{ steps.logos.outputs.has_logos }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -195,6 +199,25 @@ jobs:
           else
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Logos live only in VSP-type packages (vendor/suite/product/segment).
+      # Flag whether any changed package dir actually has one, so cdn-update
+      # runs only where it's relevant. Path-independent: reads the packages
+      # output, so it also covers the workflow_dispatch path above.
+      - name: Detect logo changes
+        id: logos
+        env:
+          PACKAGES: ${{ steps.changed.outputs.packages }}
+        run: |
+          set -euo pipefail
+          HAS=false
+          for rel in $(echo "$PACKAGES" | jq -r '.[]'); do
+            if ls "package/$rel"/logo.png "package/$rel"/logo.svg >/dev/null 2>&1; then
+              HAS=true; break
+            fi
+          done
+          echo "Changed packages include a logo: $HAS"
+          echo "has_logos=$HAS" >> "$GITHUB_OUTPUT"
 
   # ─── 2. Single-writer version bump (main only) ─────────────────────
   # Bumps every changed package's package.json + gate-stamp.json in ONE
@@ -467,7 +490,8 @@ jobs:
     needs: [detect, version, publish]
     if: |
       github.ref == 'refs/heads/main' &&
-      needs.publish.result == 'success'
+      needs.publish.result == 'success' &&
+      needs.detect.outputs.has_logos == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

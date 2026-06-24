@@ -454,10 +454,53 @@ jobs:
           SLACK_DEVOPS_NOTIFICATIONS: ${{ secrets.SLACK_DEVOPS_NOTIFICATIONS }}
           READ_TOKEN: ${{ env.READ_TOKEN }}
 
+  # ─── 3.5 CDN logo upload (main only) ───────────────────────────────
+  # Uploads each changed vendor/suite package's logo.{svg,png} to
+  # s3://auditmation-cdn/logos and rewrites index.yml `logo:`. Restores
+  # the postpublish step the lerna→gradle migration dropped (the
+  # nx-actions/cdn-update action already existed but was never wired in).
+  # The action skips any package dir without a logo file (frameworks,
+  # crosswalks, standards), so only vendor/suite logos upload. Sequenced
+  # before update-bundle so its index.yml commit lands before the bundle
+  # refresh, avoiding concurrent pushes to main.
+  cdn-update:
+    needs: [detect, version, publish]
+    if: |
+      github.ref == 'refs/heads/main' &&
+      needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Pick up the version-bump commit so the cdn commit stacks on
+          # the published state, not the pre-bump push SHA.
+          ref: ${{ needs.version.outputs.sha || github.sha }}
+      # Checkout at a SHA is detached HEAD; restore the branch so the
+      # action's add-and-commit can push back to main.
+      - name: Restore branch name
+        run: git checkout -B "${{ github.ref_name }}"
+      - name: Compute changed package dirs
+        id: dirs
+        env:
+          PACKAGES: ${{ needs.detect.outputs.packages }}
+        run: |
+          # detect emits paths relative to package/ (e.g. ["scf","scf/scf"]);
+          # the cdn-update action expects full package/<dir> paths.
+          DIRS=$(echo "$PACKAGES" | jq -r '.[] | "package/" + .' | tr '\n' ' ')
+          echo "Changed dirs: $DIRS"
+          echo "dirs=$DIRS" >> "$GITHUB_OUTPUT"
+      - name: CDN Update
+        uses: zerobias-org/devops/nx-actions/cdn-update@main
+        with:
+          changed-dirs: ${{ steps.dirs.outputs.dirs }}
+
   # ─── 4. Refresh bundle/package.json on successful main publish ─────
   update-bundle:
-    needs: publish
+    needs: [publish, cdn-update]
     if: |
+      always() &&
       github.ref == 'refs/heads/main' &&
       needs.publish.result == 'success'
     runs-on: ubuntu-latest

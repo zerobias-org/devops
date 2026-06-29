@@ -549,7 +549,7 @@ jobs:
     if: |
       github.ref == 'refs/heads/main' &&
       needs.publish.result == 'success' &&
-      inputs.skip-sync != true
+      inputs.skip-sync != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

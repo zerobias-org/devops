@@ -67,9 +67,17 @@ runs:
         for pkg_json in $(find . -path "./$PACKAGE_GLOB" -not -path "*/node_modules/*" -not -path "*/ts/*" | sort); do
           name=$(jq -r '.name // empty' "$pkg_json")
           [ -z "$name" ] && continue
-          version=$(npm view "$name" version --registry="$REGISTRY_URL" 2>/dev/null || echo "")
-          if [ -z "$version" ] || [[ "$version" == npm\ ERR* ]]; then
-            echo "  [skip] $name (not published)"
+          # Pin the newest *stable* release. `npm view <name> version` returns
+          # whatever the `latest` dist-tag points at, and an untagged prerelease
+          # publish (`x.y.z-rc.n`) moves `latest` — so trusting it lets rc/beta
+          # builds leak into the bundle. Instead, list all versions, drop any
+          # with a semver prerelease component (contains `-`), and take the max.
+          version=$(npm view "$name" versions --json --registry="$REGISTRY_URL" 2>/dev/null \
+            | jq -r '(if type=="array" then .[] else . end)' \
+            | grep -v -- '-' \
+            | sort -V | tail -1)
+          if [ -z "$version" ]; then
+            echo "  [skip] $name (no stable release)"
             continue
           fi
           new_deps=$(echo "$new_deps" | jq --arg n "$name" --arg v "$version" '. + {($n): $v}')

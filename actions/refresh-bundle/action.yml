@@ -67,14 +67,19 @@ runs:
         for pkg_json in $(find . -path "./$PACKAGE_GLOB" -not -path "*/node_modules/*" -not -path "*/ts/*" | sort); do
           name=$(jq -r '.name // empty' "$pkg_json")
           [ -z "$name" ] && continue
+          # private packages (e.g. update/ fetchers) are never published — skip
+          [ "$(jq -r '.private // false' "$pkg_json")" = "true" ] && { echo "  [skip] $name (private)"; continue; }
           # Pin the newest *stable* release. `npm view <name> version` returns
           # whatever the `latest` dist-tag points at, and an untagged prerelease
           # publish (`x.y.z-rc.n`) moves `latest` — so trusting it lets rc/beta
           # builds leak into the bundle. Instead, list all versions, drop any
           # with a semver prerelease component (contains `-`), and take the max.
-          version=$(npm view "$name" versions --json --registry="$REGISTRY_URL" 2>/dev/null \
+          # Both npm view (exit 1 on E404 — npm-version-dependent) and grep -v
+          # (exit 1 when everything is a prerelease) must not kill the script
+          # under pipefail; empty results flow into the [skip] branch below.
+          version=$( (npm view "$name" versions --json --registry="$REGISTRY_URL" 2>/dev/null || true) \
             | jq -r '(if type=="array" then .[] else . end)' \
-            | grep -v -- '-' \
+            | { grep -v -- '-' || true; } \
             | sort -V | tail -1)
           if [ -z "$version" ]; then
             echo "  [skip] $name (no stable release)"

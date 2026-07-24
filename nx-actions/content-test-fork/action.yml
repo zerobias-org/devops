@@ -150,7 +150,7 @@ runs:
       if: steps.detect_changes.outputs.HAS_CHANGES == 'true'
       shell: bash
       run: |
-        npm i -g @zerobias-com/platform-dataloader@latest
+        npm i -g @zerobias-com/platform-dataloader@prod
         for pkg in ${{ steps.detect_changes.outputs.CHANGED_DIRS }}; do
           if [ -f "$pkg/package.json" ]; then
             echo "Running dataloader for $pkg"

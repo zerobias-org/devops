@@ -286,7 +286,7 @@ jobs:
           npm i -g @zerobias-org/zbb
           # zbb's preflight requires platform-dataloader >=1.0.87
           # globally
-          npm i -g @zerobias-com/platform-dataloader
+          npm i -g @zerobias-com/platform-dataloader@prod
 
       - name: Bootstrap zbb slot
         run: |
@@ -410,7 +410,7 @@ jobs:
           cp .npmrc $HOME/.npmrc
           cp .npmrc $NPM_CONFIG_USERCONFIG
           npm i -g @zerobias-org/zbb
-          npm i -g @zerobias-com/platform-dataloader
+          npm i -g @zerobias-com/platform-dataloader@prod
 
       - name: Make gradlew executable
         run: chmod +x gradlew

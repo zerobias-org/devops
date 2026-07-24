@@ -504,9 +504,15 @@ jobs:
           # the published state, not the pre-bump push SHA.
           ref: ${{ needs.version.outputs.sha || github.sha }}
       # Checkout at a SHA is detached HEAD; restore the branch so the
-      # action's add-and-commit can push back to main.
+      # action's add-and-commit can push back to main. The recreated
+      # branch has no upstream, so enable push.autoSetupRemote too —
+      # otherwise EndBug/add-and-commit's bare `git push` fails with
+      # "The current branch main has no upstream branch" (commits, never
+      # pushes, and the whole job reports failure).
       - name: Restore branch name
-        run: git checkout -B "${{ github.ref_name }}"
+        run: |
+          git checkout -B "${{ github.ref_name }}"
+          git config push.autoSetupRemote true
       - name: Compute changed package dirs
         id: dirs
         env:

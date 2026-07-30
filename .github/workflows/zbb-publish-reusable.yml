@@ -550,11 +550,21 @@ jobs:
 
   # ─── 5. Sync env branches — runs after update-bundle so propagated
   # branches include the bundle-refresh commit.
+  #
+  # needs always(): cdn-update skips on logo-less repos (framework, crosswalk,
+  # standard), and a skipped ancestor skips this job too unless it opts out.
+  # update-bundle already opts out with always() — sync sits downstream of it
+  # and did not, so from #14 (which introduced cdn-update) until this fix, no
+  # logo-less repo ever synced. Guard update-bundle explicitly: always() alone
+  # would let sync run when the bundle refresh failed, propagating branches
+  # without the bundle commit the ordering exists to include.
   sync:
     needs: [publish, update-bundle]
     if: |
+      always() &&
       github.ref == 'refs/heads/main' &&
       needs.publish.result == 'success' &&
+      needs.update-bundle.result == 'success' &&
       inputs.skip-sync != 'true'
     runs-on: ubuntu-latest
     steps:

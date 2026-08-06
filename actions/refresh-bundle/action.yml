@@ -11,6 +11,11 @@ description: |
   whose publish failed in the matrix do not get pinned at versions
   that never reached the registry.
 
+  Deps already pinned in the bundle are refreshed but never dropped,
+  even when they have no package/ directory — generated articles are
+  recorded only in bundle/package.json. Removing a package from the
+  bundle is a manual edit.
+
 inputs:
   registry-url:
     description: 'npm registry for publish + version queries.'
@@ -63,27 +68,49 @@ runs:
 
         echo "//$(echo "$REGISTRY_URL" | sed -E 's|^https?://||; s|/$||')/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
 
+        # Candidate names: every non-private package on disk, plus every name
+        # already pinned in the bundle. Generated articles (e.g. kb's
+        # generate-kb action) live ONLY in bundle/package.json — rebuilding
+        # from the package glob alone drops them on every refresh (that wiped
+        # three kb-ct* articles from kb-bundle@0.0.228). Removing a package
+        # from the bundle is now a manual edit of bundle/package.json.
+        names=$(
+          {
+            for pkg_json in $(find . -path "./$PACKAGE_GLOB" -not -path "*/node_modules/*" -not -path "*/ts/*" | sort); do
+              # private packages (e.g. update/ fetchers) are never published — skip
+              [ "$(jq -r '.private // false' "$pkg_json")" = "true" ] && continue
+              jq -r '.name // empty' "$pkg_json"
+            done
+            jq -r '.dependencies // {} | keys[]' bundle/package.json
+          } | sort -u
+        )
+
         new_deps=$(jq -n '{}')
-        for pkg_json in $(find . -path "./$PACKAGE_GLOB" -not -path "*/node_modules/*" -not -path "*/ts/*" | sort); do
-          name=$(jq -r '.name // empty' "$pkg_json")
-          [ -z "$name" ] && continue
-          # private packages (e.g. update/ fetchers) are never published — skip
-          [ "$(jq -r '.private // false' "$pkg_json")" = "true" ] && { echo "  [skip] $name (private)"; continue; }
+        for name in $names; do
           # Pin the newest *stable* release. `npm view <name> version` returns
           # whatever the `latest` dist-tag points at, and an untagged prerelease
           # publish (`x.y.z-rc.n`) moves `latest` — so trusting it lets rc/beta
-          # builds leak into the bundle. Instead, list all versions, drop any
-          # with a semver prerelease component (contains `-`), and take the max.
-          # Both npm view (exit 1 on E404 — npm-version-dependent) and grep -v
-          # (exit 1 when everything is a prerelease) must not kill the script
-          # under pipefail; empty results flow into the [skip] branch below.
+          # builds leak into the bundle. Instead, list all versions, keep only
+          # plain x.y.z (drops prereleases AND non-version noise), take the max.
+          # npm --json prints its ERROR OBJECT to stdout on failure (E404,
+          # registry 5xx) while `|| true` keeps pipefail happy — without the
+          # strict semver filter a stray brace from that object sorts last and
+          # becomes the "version" (kb-bundle@0.0.228 shipped deps pinned to
+          # "}" exactly this way). grep may exit 1 on no match; keep it alive.
           version=$( (npm view "$name" versions --json --registry="$REGISTRY_URL" 2>/dev/null || true) \
-            | jq -r '(if type=="array" then .[] else . end)' \
-            | { grep -v -- '-' || true; } \
+            | jq -r 'if type=="array" then .[] elif type=="string" then . else empty end' \
+            | { grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || true; } \
             | sort -V | tail -1)
           if [ -z "$version" ]; then
-            echo "  [skip] $name (no stable release)"
-            continue
+            # npm gave nothing usable (unpublished, transient registry error,
+            # prereleases only). Keep the existing pin instead of dropping the
+            # dep; skip only when there is no valid pin to keep.
+            version=$(jq -r --arg n "$name" '.dependencies[$n] // empty' bundle/package.json)
+            if ! echo "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "  [skip] $name (no stable release)"
+              continue
+            fi
+            echo "  [keep] $name@$version (npm lookup failed)"
           fi
           new_deps=$(echo "$new_deps" | jq --arg n "$name" --arg v "$version" '. + {($n): $v}')
         done

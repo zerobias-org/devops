@@ -76,7 +76,7 @@ runs:
 
     - name: Configure AWS credentials
       if: inputs.publish-release-event == 'true' && steps.generateSlackMessage.outputs.has_packages == 'true'
-      uses: aws-actions/configure-aws-credentials@v2
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ inputs.aws-role-arn }}
         role-session-name: ${{ github.event.repository.name }}

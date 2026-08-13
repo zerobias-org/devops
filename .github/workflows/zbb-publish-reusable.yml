@@ -352,8 +352,6 @@ jobs:
             operations-kv/data/ci/github writePackagesToken | NPM_TOKEN;
             operations-kv/data/ci/github readPackagesToken  | READ_TOKEN;
             operations-kv/data/ci/github dispatchToken      | DISPATCH_TOKEN;
-            aws-auth/tools/ecr/creds/ecr-push access_key    | AWS_ACCESS_KEY_ID;
-            aws-auth/tools/ecr/creds/ecr-push secret_key    | AWS_SECRET_ACCESS_KEY;
             operations-kv/data/neon/content api-key         | NEON_API_KEY;
             operations-kv/data/neon/content project-id      | NEON_PROJECT_ID;
 
@@ -372,16 +370,17 @@ jobs:
           git config --global user.email "ci@neverfail.com"
           git config --global user.name "@$GITHUB_ACTOR"
 
-      # AWS IAM eventual consistency: freshly generated credentials may
-      # take a few seconds to propagate. Retry with backoff.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::961260934100:role/github-actions-publishing-role
+          role-session-name: ${{ github.event.repository.name }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Login to ECR
         run: |
-          for i in 1 2 3 4 5; do
-            aws ecr get-login-password --region "$AWS_REGION" | \
-              docker login --username AWS --password-stdin "$ECR_REGISTRY" && break
-            echo "ECR login attempt $i failed — waiting ${i}0s for IAM propagation..."
-            sleep ${i}0
-          done
+          aws ecr get-login-password --region "$AWS_REGION" | \
+            docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
       - name: Login to GHCR
         uses: docker/login-action@v3

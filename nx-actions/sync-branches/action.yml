@@ -23,6 +23,12 @@ runs:
           fi
 
           echo "Merging $PREV into $TARGET..."
+          # Re-fetch the source branch. actions/checkout pins refs/remotes/origin/main
+          # to github.sha, so when a caller commits to main *during* the run (the
+          # update-bundle job does exactly that, by design, so its commit rides along),
+          # the pinned ref is already stale and merging it silently drops that commit.
+          # Fetch PREV explicitly so we always merge the branch's real tip.
+          git fetch origin "$PREV"
           git fetch origin "$TARGET"
           git checkout "$TARGET"
           if git merge "origin/$PREV" -m "chore: sync $PREV into $TARGET"; then

@@ -23,7 +23,20 @@ runs:
           fi
 
           echo "Merging $PREV into $TARGET..."
-          git fetch origin "$TARGET"
+          # Refresh both remote-tracking refs before merging.
+          #
+          # actions/checkout pins refs/remotes/origin/main to github.sha, so when a
+          # caller commits to main *during* the run — the publish workflow's version
+          # and update-bundle jobs both do, by design, so their commits ride along —
+          # the pinned ref is already stale and merging it silently drops them.
+          #
+          # The refspec is explicit rather than a bare `git fetch origin $PREV`: a
+          # bare fetch only updates the tracking ref when remote.origin.fetch happens
+          # to cover it. That holds for the wide refspec checkout leaves today, but
+          # not if it is ever narrowed, and the second and third hops (uat -> qa ->
+          # dev) would then merge stale refs while the first hop looked correct.
+          git fetch origin "+refs/heads/$PREV:refs/remotes/origin/$PREV"
+          git fetch origin "+refs/heads/$TARGET:refs/remotes/origin/$TARGET"
           git checkout "$TARGET"
           if git merge "origin/$PREV" -m "chore: sync $PREV into $TARGET"; then
             git push origin "$TARGET"

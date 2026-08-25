@@ -66,6 +66,11 @@ jobs:
           fi
 
           PRETTY_FLOW=$(echo "$FLOW" | sed 's/ / → /g')
+          LAST="${CHAIN[${#CHAIN[@]}-1]}"
+          DOWNSTREAM=""
+          for (( i=${#CHAIN[@]}-2; i>=0; i-- )); do
+            DOWNSTREAM+="${DOWNSTREAM:+, }\`${CHAIN[$i]}\`"
+          done
           BODY_FILE=$(mktemp)
           {
             echo "$MARKER"
@@ -78,6 +83,14 @@ jobs:
             echo "without having passed through \`$EXPECTED\`, which causes drift and"
             echo "conflicts further down the chain. Consider landing this in the"
             echo "lowest environment first and promoting it up."
+            if [ "$BASE" = "$LAST" ]; then
+              echo
+              echo "**Extra caution:** \`$BASE\` is the sync source. Once this merges,"
+              echo "the changes are automatically synced into $DOWNSTREAM — conflicting"
+              echo "hunks there resolve in \`$BASE\`'s favor, and overwritten branch work"
+              echo "is moved into \`sync-rescue\` PRs. Skipping the chain can create"
+              echo "turbulence on all of those branches at once."
+            fi
           } > "$BODY_FILE"
 
           # Fork PRs get a read-only GITHUB_TOKEN — stay advisory, never fail.

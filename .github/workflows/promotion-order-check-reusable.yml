@@ -59,6 +59,13 @@ jobs:
             exit 0
           fi
 
+          # If the expected source branch doesn't exist in this repo, the
+          # promotion chain isn't (fully) adopted here — nothing to enforce.
+          if ! gh api "repos/$GITHUB_REPOSITORY/branches/$EXPECTED" --silent 2>/dev/null; then
+            echo "::notice::Expected branch '$EXPECTED' does not exist — chain not adopted, skipping."
+            exit 0
+          fi
+
           MARKER="<!-- promotion-order-check -->"
           if gh pr view "$PR_URL" --json comments --jq '.comments[].body' | grep -qF "$MARKER"; then
             echo "::notice::Already commented on this PR — skipping."

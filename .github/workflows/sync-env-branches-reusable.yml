@@ -40,19 +40,26 @@ jobs:
         target: ${{ fromJson(needs.resolve-targets.outputs.targets) }}
     concurrency:
       group: sync-env-${{ github.repository }}-${{ matrix.target }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      # Prefer PR_TOKEN (a PAT) where the repo has one: its pushes trigger
+      # downstream workflows (e.g. publish routing on env branches). Fall
+      # back to the workflow token — sync still works, but its pushes
+      # trigger nothing.
+      PUSH_TOKEN: ${{ secrets.PR_TOKEN != '' && secrets.PR_TOKEN || github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # PR_TOKEN, not GITHUB_TOKEN: pushes made with the default token
-          # cannot trigger other workflows (e.g. future deploy-on-push on
-          # env branches).
-          token: ${{ secrets.PR_TOKEN }}
+          token: ${{ env.PUSH_TOKEN }}
 
       - name: Sync ${{ github.ref_name }} into ${{ matrix.target }}
         env:
-          GH_TOKEN: ${{ secrets.PR_TOKEN }}
+          GH_TOKEN: ${{ env.PUSH_TOKEN }}
           SOURCE: ${{ github.ref_name }}
           TARGET: ${{ matrix.target }}
         run: |

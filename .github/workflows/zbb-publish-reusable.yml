@@ -564,7 +564,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       needs.publish.result == 'success' &&
       needs.update-bundle.result == 'success' &&
-      inputs.skip-sync != 'true'
+      !inputs.skip-sync
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

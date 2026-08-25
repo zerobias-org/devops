@@ -32,6 +32,15 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Sync-rescue PRs restore content overwritten by the env-branch
+          # sync; they legitimately target env branches directly.
+          case "$HEAD" in
+            rescue/*)
+              echo "::notice::'$HEAD' is a sync-rescue branch — promotion order not applicable."
+              exit 0
+              ;;
+          esac
+
           # Locate BASE in the chain; the expected head is the element before it.
           read -ra CHAIN <<< "$FLOW"
           EXPECTED=""

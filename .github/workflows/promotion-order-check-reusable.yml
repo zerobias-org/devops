@@ -76,20 +76,12 @@ jobs:
             echo "$MARKER"
             echo "⚠️ **This PR skips a step in the promotion chain.**"
             echo
-            echo "It targets \`$BASE\` but comes from \`$HEAD\` instead of \`$EXPECTED\`."
-            echo "The expected flow is \`$PRETTY_FLOW\`."
+            echo "It targets \`$BASE\` but comes from \`$HEAD\` instead of \`$EXPECTED\`. The expected flow is \`$PRETTY_FLOW\`."
             echo
-            echo "Merges that skip steps are not encouraged: changes land in \`$BASE\`"
-            echo "without having passed through \`$EXPECTED\`, which causes drift and"
-            echo "conflicts further down the chain. Consider landing this in the"
-            echo "lowest environment first and promoting it up."
+            echo "Merges that skip steps are not encouraged: changes land in \`$BASE\` without having passed through \`$EXPECTED\`, which causes drift and conflicts further down the chain. Consider landing this in the lowest environment first and promoting it up."
             if [ "$BASE" = "$LAST" ]; then
               echo
-              echo "**Extra caution:** \`$BASE\` is the sync source. Once this merges,"
-              echo "the changes are automatically synced into $DOWNSTREAM — conflicting"
-              echo "hunks there resolve in \`$BASE\`'s favor, and overwritten branch work"
-              echo "is moved into \`sync-rescue\` PRs. Skipping the chain can create"
-              echo "turbulence on all of those branches at once."
+              echo "**Extra caution:** \`$BASE\` is the sync source. Once this merges, the changes are automatically synced into $DOWNSTREAM — conflicting hunks there resolve in \`$BASE\`'s favor, and overwritten branch work is moved into \`sync-rescue\` PRs. Skipping the chain can create turbulence on all of those branches at once."
             fi
           } > "$BODY_FILE"
 

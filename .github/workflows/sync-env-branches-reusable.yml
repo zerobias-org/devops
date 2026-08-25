@@ -168,9 +168,7 @@ jobs:
 
           BODY_FILE=$(mktemp)
           {
-            echo "The scheduled sync of \`$SOURCE\` into \`$TARGET\` hit conflicts."
-            echo "\`$SOURCE\` won the conflicting hunks; this PR restores \`$TARGET\`'s"
-            echo "pre-sync versions of the conflicted files so nothing is lost."
+            echo "The scheduled sync of \`$SOURCE\` into \`$TARGET\` hit conflicts. \`$SOURCE\` won the conflicting hunks; this PR restores \`$TARGET\`'s pre-sync versions of the conflicted files so nothing is lost."
             echo
             echo "**Conflicted files:**"
             printf '%s\n' "$CONFLICTED" | sed 's/^/- `/; s/$/`/'

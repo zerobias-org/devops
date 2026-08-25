@@ -45,11 +45,12 @@ jobs:
       pull-requests: write
       issues: write
     env:
-      # Prefer PR_TOKEN (a PAT) where the repo has one: its pushes trigger
-      # downstream workflows (e.g. publish routing on env branches). Fall
-      # back to the workflow token — sync still works, but its pushes
-      # trigger nothing.
-      PUSH_TOKEN: ${{ secrets.PR_TOKEN != '' && secrets.PR_TOKEN || github.token }}
+      # The built-in token: sync pushes deliberately trigger no downstream
+      # workflows. Do NOT use the org's PR_TOKEN secret — it is a dead PAT
+      # (checkout with it fails auth, 2026-08). When a working push PAT
+      # exists, swap it in here to let sync pushes trigger env-branch
+      # workflows (e.g. publish routing).
+      PUSH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

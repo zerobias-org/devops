@@ -1,7 +1,8 @@
 name: Sync Env Branches Reusable
 
 # Syncs the calling branch (normally main) into each target env branch in
-# parallel. The target branch keeps its own work and receives everything
+# parallel; targets that don't exist yet are created at the source branch.
+# The target branch keeps its own work and receives everything
 # from the source; on conflicting hunks the SOURCE side wins. Content that
 # gets discarded this way is preserved in a `rescue/<target>` branch and
 # surfaced as a PR (label: sync-rescue) against the target branch, which
@@ -70,7 +71,8 @@ jobs:
           git config user.email "ci@zerobias.com"
 
           if ! git ls-remote --exit-code --heads origin "$TARGET" >/dev/null; then
-            echo "::notice::Branch '$TARGET' does not exist — skipping."
+            git push origin "$(git rev-parse "origin/$SOURCE"):refs/heads/$TARGET"
+            echo "::notice::Branch '$TARGET' did not exist — created at '$SOURCE'."
             exit 0
           fi
 

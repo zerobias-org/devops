@@ -1,0 +1,78 @@
+name: Promotion Order Check Reusable
+
+# Advisory check for pull_request events: if a PR targets a branch in the
+# promotion chain (default dev → qa → uat → main) but does not come from
+# the branch right before it, leave a comment explaining that skipping
+# steps is discouraged. Comment-only: the job always succeeds and never
+# blocks the merge. Comments once per PR (deduped via a hidden marker).
+
+on:
+  workflow_call:
+    inputs:
+      promotion-flow:
+        description: 'Space-separated promotion chain, lowest environment first'
+        type: string
+        required: false
+        default: 'dev qa uat main'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check promotion order
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FLOW: ${{ inputs.promotion-flow }}
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+
+          # Locate BASE in the chain; the expected head is the element before it.
+          read -ra CHAIN <<< "$FLOW"
+          EXPECTED=""
+          for i in "${!CHAIN[@]}"; do
+            if [ "${CHAIN[$i]}" = "$BASE" ] && [ "$i" -gt 0 ]; then
+              EXPECTED="${CHAIN[$((i - 1))]}"
+            fi
+          done
+
+          if [ -z "$EXPECTED" ]; then
+            echo "::notice::Base '$BASE' is not a promotion target — nothing to check."
+            exit 0
+          fi
+          if [ "$HEAD" = "$EXPECTED" ]; then
+            echo "::notice::'$HEAD' -> '$BASE' follows the promotion chain."
+            exit 0
+          fi
+
+          MARKER="<!-- promotion-order-check -->"
+          if gh pr view "$PR_URL" --json comments --jq '.comments[].body' | grep -qF "$MARKER"; then
+            echo "::notice::Already commented on this PR — skipping."
+            exit 0
+          fi
+
+          PRETTY_FLOW=$(echo "$FLOW" | sed 's/ / → /g')
+          BODY_FILE=$(mktemp)
+          {
+            echo "$MARKER"
+            echo "⚠️ **This PR skips a step in the promotion chain.**"
+            echo
+            echo "It targets \`$BASE\` but comes from \`$HEAD\` instead of \`$EXPECTED\`."
+            echo "The expected flow is \`$PRETTY_FLOW\`."
+            echo
+            echo "Merges that skip steps are not encouraged: changes land in \`$BASE\`"
+            echo "without having passed through \`$EXPECTED\`, which causes drift and"
+            echo "conflicts further down the chain. Consider landing this in the"
+            echo "lowest environment first and promoting it up."
+          } > "$BODY_FILE"
+
+          # Fork PRs get a read-only GITHUB_TOKEN — stay advisory, never fail.
+          if gh pr comment "$PR_URL" --body-file "$BODY_FILE"; then
+            echo "::warning::PR '$HEAD' -> '$BASE' skips '$EXPECTED' — advisory comment added."
+          else
+            echo "::warning::PR '$HEAD' -> '$BASE' skips '$EXPECTED' — could not comment (read-only token?)."
+          fi

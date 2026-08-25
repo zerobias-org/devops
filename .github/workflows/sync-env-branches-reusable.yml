@@ -1,0 +1,184 @@
+name: Sync Env Branches Reusable
+
+# Syncs the calling branch (normally main) into each target env branch in
+# parallel. The target branch keeps its own work and receives everything
+# from the source; on conflicting hunks the SOURCE side wins. Content that
+# gets discarded this way is preserved in a `rescue/<target>` branch and
+# surfaced as a PR (label: sync-rescue) against the target branch, which
+# can be merged after reconciling or closed to accept the source's version.
+#
+# The sync job itself never fails on divergence — divergence is expected;
+# the rescue PR is the flag.
+
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: 'Space-separated env branches to sync the calling branch into'
+        type: string
+        required: false
+        default: 'uat qa dev'
+
+jobs:
+  resolve-targets:
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.list.outputs.targets }}
+    steps:
+      - name: Build target matrix
+        id: list
+        run: |
+          targets=$(printf '%s\n' ${{ inputs.targets }} | jq -R . | jq -cs .)
+          echo "targets=${targets}" >> "$GITHUB_OUTPUT"
+
+  sync:
+    needs: resolve-targets
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(needs.resolve-targets.outputs.targets) }}
+    concurrency:
+      group: sync-env-${{ github.repository }}-${{ matrix.target }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # PR_TOKEN, not GITHUB_TOKEN: pushes made with the default token
+          # cannot trigger other workflows (e.g. future deploy-on-push on
+          # env branches).
+          token: ${{ secrets.PR_TOKEN }}
+
+      - name: Sync ${{ github.ref_name }} into ${{ matrix.target }}
+        env:
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
+          SOURCE: ${{ github.ref_name }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+
+          git config user.name  "zb-ci"
+          git config user.email "ci@zerobias.com"
+
+          if ! git ls-remote --exit-code --heads origin "$TARGET" >/dev/null; then
+            echo "::notice::Branch '$TARGET' does not exist — skipping."
+            exit 0
+          fi
+
+          git checkout -B "$TARGET" "origin/$TARGET"
+          OLD_TIP=$(git rev-parse HEAD)
+
+          if git merge-base --is-ancestor "origin/$SOURCE" HEAD; then
+            echo "::notice::'$TARGET' already contains '$SOURCE' — nothing to do."
+            exit 0
+          fi
+
+          # 1) Trial plain merge — the common, conflict-free case.
+          if git merge --no-edit "origin/$SOURCE"; then
+            git push origin "$TARGET"
+            echo "::notice::Clean merge of '$SOURCE' into '$TARGET'."
+            exit 0
+          fi
+
+          CONFLICTED=$(git diff --name-only --diff-filter=U)
+          git merge --abort
+
+          # 2) Forced merge: source wins conflicting hunks.
+          git merge --no-edit -X theirs "origin/$SOURCE" || true
+
+          # -X theirs only resolves content conflicts; take the source side
+          # for whatever remains (delete/modify, add/add, ...).
+          git diff --name-only --diff-filter=U -z | while IFS= read -r -d '' path; do
+            if git cat-file -e "MERGE_HEAD:$path" 2>/dev/null; then
+              git checkout MERGE_HEAD -- "$path"
+              git add -- "$path"
+            else
+              git rm -f -q -- "$path"
+            fi
+          done
+
+          if [ -f .git/MERGE_HEAD ]; then
+            git commit --no-edit
+          fi
+          git push origin "$TARGET"
+          echo "::warning::Merged '$SOURCE' into '$TARGET' with conflicts; source side won. Opening rescue PR."
+
+          # 3) Rescue branch: merged result + the target's pre-merge versions
+          #    of the conflicted paths. One branch/PR per target; refreshed,
+          #    never duplicated.
+          RESCUE="rescue/$TARGET"
+          EXISTING_PR=$(gh pr list --head "$RESCUE" --base "$TARGET" --state open \
+            --json number --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING_PR" ] && git ls-remote --exit-code --heads origin "$RESCUE" >/dev/null; then
+            # Carry previously rescued content forward: update the existing
+            # rescue branch to the new target state, keeping the rescue side
+            # wherever they disagree.
+            git checkout -B "$RESCUE" "origin/$RESCUE"
+            git merge --no-edit -X ours "$TARGET" || true
+            git diff --name-only --diff-filter=U -z | while IFS= read -r -d '' path; do
+              if git cat-file -e "HEAD:$path" 2>/dev/null; then
+                git checkout HEAD -- "$path"
+                git add -- "$path"
+              else
+                git rm -f -q -- "$path"
+              fi
+            done
+            if [ -f .git/MERGE_HEAD ]; then
+              git commit --no-edit
+            fi
+          else
+            git checkout -B "$RESCUE" "$TARGET"
+          fi
+
+          printf '%s\n' "$CONFLICTED" | while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            if git cat-file -e "$OLD_TIP:$path" 2>/dev/null; then
+              git checkout "$OLD_TIP" -- "$path"
+              git add -- "$path"
+            else
+              git rm -f -q --ignore-unmatch -- "$path"
+            fi
+          done
+
+          git diff --cached --quiet || \
+            git commit -m "rescue($TARGET): restore pre-sync versions of conflicted paths"
+
+          # If the rescue branch offers nothing beyond the target, skip the PR.
+          if [ "$(git rev-parse "HEAD^{tree}")" = "$(git rev-parse "$TARGET^{tree}")" ]; then
+            echo "::notice::Discarded content already matches '$TARGET' — no rescue needed."
+            exit 0
+          fi
+          git push -f origin "$RESCUE"
+
+          gh label create sync-rescue \
+            --description "Content overwritten by an env-branch sync, awaiting reconciliation" \
+            --color B60205 2>/dev/null || true
+
+          BODY_FILE=$(mktemp)
+          {
+            echo "The scheduled sync of \`$SOURCE\` into \`$TARGET\` hit conflicts."
+            echo "\`$SOURCE\` won the conflicting hunks; this PR restores \`$TARGET\`'s"
+            echo "pre-sync versions of the conflicted files so nothing is lost."
+            echo
+            echo "**Conflicted files:**"
+            printf '%s\n' "$CONFLICTED" | sed 's/^/- `/; s/$/`/'
+            echo
+            echo "**How to handle this PR:**"
+            echo "- Reconcile the files on \`$RESCUE\` and **merge** to re-apply \`$TARGET\`'s work, or"
+            echo "- **Close** it to accept \`$SOURCE\`'s version as-is."
+            echo
+            echo "_Last refreshed by run [#${GITHUB_RUN_NUMBER}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})._"
+          } > "$BODY_FILE"
+
+          if [ -n "$EXISTING_PR" ]; then
+            gh pr edit "$EXISTING_PR" --body-file "$BODY_FILE"
+            echo "::notice::Refreshed rescue PR #$EXISTING_PR for '$TARGET'."
+          else
+            gh pr create --head "$RESCUE" --base "$TARGET" \
+              --title "rescue: restore \`$TARGET\` content overwritten by sync from \`$SOURCE\`" \
+              --label sync-rescue \
+              --body-file "$BODY_FILE"
+            echo "::notice::Opened rescue PR for '$TARGET'."
+          fi

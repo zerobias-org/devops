@@ -181,8 +181,10 @@ jobs:
           } > "$BODY_FILE"
 
           if [ -n "$EXISTING_PR" ]; then
-            gh pr edit "$EXISTING_PR" --body-file "$BODY_FILE"
-            echo "::notice::Refreshed rescue PR #$EXISTING_PR for '$TARGET'."
+            # Comment rather than rewrite the body: the PR timeline keeps
+            # one entry per sync round, each with its conflicted files.
+            gh pr comment "$EXISTING_PR" --body-file "$BODY_FILE"
+            echo "::notice::Refreshed rescue PR #$EXISTING_PR for '$TARGET' (new round commented)."
           else
             gh pr create --head "$RESCUE" --base "$TARGET" \
               --title "rescue: restore \`$TARGET\` content overwritten by sync from \`$SOURCE\`" \

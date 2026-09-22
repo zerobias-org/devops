@@ -421,10 +421,20 @@ jobs:
         # sync (e.g. vendor's root lockfile lacks entries for many
         # workspace packages). Per-package install only needs that
         # package's own deps.
+        # npm ci when the package ships an npm-shrinkwrap.json: `npm
+        # install` rewrites the shrinkwrap's root `version` to match the
+        # (just-bumped) package.json, and the shrinkwrap is in `files[]`,
+        # so it is part of the gate-stamp sourceHash — the rewrite makes
+        # publishGuard fail with "source-hash-changed". `npm ci` never
+        # writes the lockfile. See zerobias-org/vendor run 35767716287.
         run: |
           cd "package/${{ matrix.package }}"
           cp $HOME/.npmrc .npmrc
-          npm install --no-workspaces --no-audit --no-fund --silent
+          if [ -f npm-shrinkwrap.json ]; then
+            npm ci --no-workspaces --no-audit --no-fund --silent
+          else
+            npm install --no-workspaces --no-audit --no-fund --silent
+          fi
 
       # Bootstrap an ephemeral slot for this CI run. CI mode
       # (auto-detected from CI=true) snapshots process.env as slot

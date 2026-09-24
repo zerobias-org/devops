@@ -26,7 +26,7 @@ inputs:
     required: false
     default: ''
   internal:
-    description: 'Announce to the internal releases channel (SLACK_INTERNAL_RELEASES_WEBHOOK) instead of the main releases channel'
+    description: 'Assert internal routing — fail if SLACK_INTERNAL_RELEASES_WEBHOOK is unset. Routing is automatic whenever that var is declared, so this is only an assertion.'
     required: false
     default: 'false'
 
@@ -65,7 +65,7 @@ runs:
       uses: slackapi/slack-github-action@v2.1.1
       if: success() && steps.generateSlackMessage.outputs.has_packages == 'true'
       with:
-        webhook: ${{ inputs.internal == 'true' && env.SLACK_INTERNAL_RELEASES_WEBHOOK || env.SLACK_RELEASES_WEBHOOK }}
+        webhook: ${{ env.SLACK_INTERNAL_RELEASES_WEBHOOK || env.SLACK_RELEASES_WEBHOOK }}
         webhook-type: incoming-webhook
         payload: |
           text: "New ${{ github.repository }} Published"

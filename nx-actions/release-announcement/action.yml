@@ -25,6 +25,10 @@ inputs:
     description: 'NPM dist-tag applied (e.g., rc, dev, qa, latest)'
     required: false
     default: ''
+  internal:
+    description: 'Announce to the internal releases channel (SLACK_INTERNAL_RELEASES_WEBHOOK) instead of the main releases channel'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -50,11 +54,18 @@ runs:
         READ_TOKEN: ${{ env.READ_TOKEN }}
         PACKAGES_FILE: ${{ inputs.packages-file }}
 
+    - name: Guard Internal Webhook
+      if: success() && steps.generateSlackMessage.outputs.has_packages == 'true' && inputs.internal == 'true' && env.SLACK_INTERNAL_RELEASES_WEBHOOK == ''
+      shell: bash
+      run: |
+        echo "::error::internal=true but SLACK_INTERNAL_RELEASES_WEBHOOK is unset; refusing to fall back to the public releases channel"
+        exit 1
+
     - name: Slack Notification
       uses: slackapi/slack-github-action@v2.1.1
       if: success() && steps.generateSlackMessage.outputs.has_packages == 'true'
       with:
-        webhook: ${{ env.SLACK_RELEASES_WEBHOOK }}
+        webhook: ${{ inputs.internal == 'true' && env.SLACK_INTERNAL_RELEASES_WEBHOOK || env.SLACK_RELEASES_WEBHOOK }}
         webhook-type: incoming-webhook
         payload: |
           text: "New ${{ github.repository }} Published"

@@ -284,9 +284,10 @@ jobs:
           cp .npmrc $HOME/.npmrc
           cp .npmrc $NPM_CONFIG_USERCONFIG
           npm i -g @zerobias-org/zbb
-          # zbb's preflight requires platform-dataloader >=1.0.87
-          # globally
-          npm i -g @zerobias-com/platform-dataloader@prod --ignore-scripts
+          # zbb's preflight checks this global loader against the repo's minimum: dev/qa get their env's loader (its deploy sets the tag), else prod.
+          loader_tag=prod
+          case "${{ github.ref_name }}" in dev|qa) npm view "@zerobias-com/platform-dataloader@${{ github.ref_name }}" version >/dev/null 2>&1 && loader_tag="${{ github.ref_name }}" ;; esac
+          npm i -g "@zerobias-com/platform-dataloader@${loader_tag}" --ignore-scripts
 
       - name: Bootstrap zbb slot
         run: |
@@ -420,7 +421,10 @@ jobs:
           cp .npmrc $HOME/.npmrc
           cp .npmrc $NPM_CONFIG_USERCONFIG
           npm i -g @zerobias-org/zbb
-          npm i -g @zerobias-com/platform-dataloader@prod --ignore-scripts
+          # zbb's preflight checks this global loader against the repo's minimum: dev/qa get their env's loader (its deploy sets the tag), else prod.
+          loader_tag=prod
+          case "${{ github.ref_name }}" in dev|qa) npm view "@zerobias-com/platform-dataloader@${{ github.ref_name }}" version >/dev/null 2>&1 && loader_tag="${{ github.ref_name }}" ;; esac
+          npm i -g "@zerobias-com/platform-dataloader@${loader_tag}" --ignore-scripts
 
       - name: Make gradlew executable
         run: chmod +x gradlew

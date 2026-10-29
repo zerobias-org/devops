@@ -1,0 +1,601 @@
+name: ZBB Gate (reusable)
+
+# Runs `zbb gate` in CI for zbb content repos and commits what it changes.
+#   push to publish/<target>/<name>: gate every changed package, land the
+#     branch on <target>, then dispatch publish.yml per package and wait, so
+#     the run's conclusion covers gate, land and publish.
+#   pull_request touching package/** (same-repo only): gate the packages whose
+#     stamp fails `zbb gate --check` and push the result to the PR branch.
+# Callers grant contents: write, actions: write, id-token: write and
+# pull-requests: read, and pass `secrets: inherit`.
+
+on:
+  workflow_call:
+    inputs:
+      publish-input:
+        description: The caller's publish.yml workflow_dispatch input that takes a package path relative to package/ (e.g. `product`).
+        type: string
+        required: true
+      non-package-paths:
+        description: Extended regex for paths under package/ that belong to no package, such as generators (`^package/.+/update/`). Changes there are not gated.
+        type: string
+        required: false
+        default: ''
+      max-parallel:
+        description: Cap on concurrent gate jobs.
+        type: number
+        required: false
+        default: 4
+      timeout-minutes:
+        description: Timeout for each gate job.
+        type: number
+        required: false
+        default: 90
+
+concurrency:
+  group: zbb-gate-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  ZB_TOKEN: ${{ secrets.ZB_TOKEN }}
+
+jobs:
+  detect:
+    # Fork PRs get no secrets; PRs from publish/ branches are gated by their push run.
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && !startsWith(github.head_ref, 'publish/'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      mode: ${{ steps.trigger.outputs.mode }}
+      target: ${{ steps.trigger.outputs.target }}
+      head-sha: ${{ steps.trigger.outputs.head-sha }}
+      head-ref: ${{ steps.trigger.outputs.head-ref }}
+      dataloader-env: ${{ steps.trigger.outputs.dataloader-env }}
+      loader-tag: ${{ steps.loader.outputs.tag }}
+      packages: ${{ steps.select.outputs.packages }}
+    steps:
+      - name: Resolve trigger
+        id: trigger
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          PUSH_SHA: ${{ github.sha }}
+          PR_BASE: ${{ github.base_ref }}
+          PR_HEAD: ${{ github.head_ref }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$ZB_TOKEN" ]; then
+            echo "::error::secrets.ZB_TOKEN is empty; zbb gate would skip its dataloader step and still write a stamp"
+            exit 1
+          fi
+          case "$EVENT" in
+            push)
+              IFS=/ read -r prefix target name <<< "$REF_NAME"
+              if [ "$prefix" != publish ] || [ -z "$name" ]; then
+                echo "::error::Push mode expects a publish/<target>/<name> branch, got '$REF_NAME'"
+                exit 1
+              fi
+              case "$target" in
+                dev|qa|uat|main) ;;
+                *) echo "::error::Unsupported target '$target' in '$REF_NAME'; use dev, qa, uat or main"; exit 1 ;;
+              esac
+              mode=push sha=$PUSH_SHA ref=$REF_NAME
+              ;;
+            pull_request)
+              mode=pr target=$PR_BASE sha=$PR_SHA ref=$PR_HEAD
+              ;;
+            *)
+              echo "::error::Unsupported event '$EVENT'; call this workflow from push or pull_request"
+              exit 1
+              ;;
+          esac
+          case "$target" in dev|qa) dl_env=$target ;; *) dl_env= ;; esac
+          {
+            echo "mode=$mode"
+            echo "target=$target"
+            echo "head-sha=$sha"
+            echo "head-ref=$ref"
+            echo "dataloader-env=$dl_env"
+          } >> "$GITHUB_OUTPUT"
+          echo "mode=$mode target=$target head=$sha ($ref) DATALOADER_ENV=${dl_env:-unset}"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.trigger.outputs.head-sha }}
+          fetch-depth: 0
+
+      # Each changed file belongs to the nearest directory above it with a build.gradle.kts.
+      - name: Detect changed packages
+        id: changed
+        env:
+          MODE: ${{ steps.trigger.outputs.mode }}
+          TARGET: ${{ steps.trigger.outputs.target }}
+          IGNORE: ${{ inputs.non-package-paths }}
+        run: |
+          set -euo pipefail
+          if ! git rev-parse -q --verify "refs/remotes/origin/$TARGET" > /dev/null; then
+            echo "::error::Branch '$TARGET' does not exist on origin; create it before publishing to it"
+            exit 1
+          fi
+          if ! base=$(git merge-base "origin/$TARGET" HEAD); then
+            echo "::error::$(git rev-parse --short HEAD) shares no history with origin/$TARGET"
+            exit 1
+          fi
+          owner() {
+            OWNER=
+            local d=${1%/*}
+            while [ "$d" != package ]; do
+              if [ -f "$d/build.gradle.kts" ]; then OWNER=${d#package/}; return; fi
+              d=${d%/*}
+            done
+          }
+          declare -A pkgs=()
+          unmapped=()
+          while IFS= read -r -d '' f; do
+            if [ -n "$IGNORE" ] && [[ $f =~ $IGNORE ]]; then continue; fi
+            owner "$f"
+            if [ -n "$OWNER" ]; then pkgs[$OWNER]=1; else unmapped+=("$f"); fi
+          done < <(git diff -z --name-only --no-renames --diff-filter=d "$base" HEAD -- package/)
+          while IFS= read -r -d '' f; do
+            if [ -n "$IGNORE" ] && [[ $f =~ $IGNORE ]]; then continue; fi
+            owner "$f"
+            if [ -n "$OWNER" ]; then pkgs[$OWNER]=1; fi
+          done < <(git diff -z --name-only --no-renames --diff-filter=D "$base" HEAD -- package/)
+          if [ "${#unmapped[@]}" -gt 0 ]; then
+            printf '::error::%s is in no package: no build.gradle.kts in any directory above it\n' "${unmapped[@]}"
+            exit 1
+          fi
+          changed=$(jq -nc '$ARGS.positional | sort' --args "${!pkgs[@]}")
+          if [ "$MODE" = push ] && [ "$changed" = '[]' ]; then
+            echo "::error::No package changes between origin/$TARGET and $(git rev-parse --short HEAD)"
+            exit 1
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "Changed packages since $(git rev-parse --short "$base"): $changed"
+
+      - name: Authenticate to Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          method: jwt
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/ci/github readPackagesToken | NPM_TOKEN;
+            operations-kv/data/ci/github readPackagesToken | READ_TOKEN
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      # Same mapping as zbb-publish-reusable: dev/qa use their env's loader if tagged, else prod.
+      - name: Resolve the dataloader dist-tag
+        id: loader
+        env:
+          TARGET: ${{ steps.trigger.outputs.target }}
+        run: |
+          cp .npmrc ~/.npmrc
+          tag=prod
+          case "$TARGET" in dev|qa) npm view "@zerobias-com/platform-dataloader@$TARGET" version > /dev/null 2>&1 && tag=$TARGET ;; esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Gate jobs install @zerobias-com/platform-dataloader@$tag"
+
+      - uses: actions/setup-java@v4
+        if: steps.trigger.outputs.mode == 'pr'
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install zbb and the dataloader
+        if: steps.trigger.outputs.mode == 'pr'
+        env:
+          LOADER_TAG: ${{ steps.loader.outputs.tag }}
+        run: |
+          npm i -g @zerobias-org/zbb
+          npm i -g "@zerobias-com/platform-dataloader@$LOADER_TAG" --ignore-scripts
+
+      # Push mode gates every changed package; PR mode only those whose stamp fails the check.
+      - name: Select packages to gate
+        id: select
+        env:
+          MODE: ${{ steps.trigger.outputs.mode }}
+          TARGET: ${{ steps.trigger.outputs.target }}
+          CHANGED: ${{ steps.changed.outputs.changed }}
+        run: |
+          set -euo pipefail
+          packages=$CHANGED
+          if [ "$MODE" = pr ] && [ "$CHANGED" != '[]' ]; then
+            git checkout -q -B "$TARGET"
+            mapfile -t candidates < <(jq -r '.[]' <<< "$CHANGED")
+            stale=()
+            for p in "${candidates[@]}"; do
+              echo "::group::zbb gate --check ($p)"
+              (cd "package/$p" && zbb gate --check < /dev/null) || stale+=("$p")
+              echo "::endgroup::"
+            done
+            packages=$(jq -nc '$ARGS.positional' --args "${stale[@]}")
+          fi
+          count=$(jq length <<< "$packages")
+          if [ "$count" -gt 256 ]; then
+            echo "::error::$count packages to gate exceed the 256-job matrix limit; split the change"
+            exit 1
+          fi
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          echo "Packages to gate: $packages"
+
+  gate:
+    needs: detect
+    if: needs.detect.outputs.packages != '[]'
+    name: gate (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ inputs.max-parallel }}
+      matrix:
+        package: ${{ fromJSON(needs.detect.outputs.packages) }}
+    env:
+      # The slot snapshots process.env when it is created, so every secret must be exported first.
+      ZB_SLOT: ci-gate-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+      MODE: ${{ needs.detect.outputs.mode }}
+      TARGET: ${{ needs.detect.outputs.target }}
+      PKG: ${{ matrix.package }}
+      PATCH: ${{ strategy.job-index }}.patch
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.detect.outputs.head-sha }}
+          fetch-depth: 0
+
+      # zbb reads the branch from HEAD and treats unknown names like publish/... as uat.
+      - name: Check out as ${{ needs.detect.outputs.target }}
+        run: git checkout -B "$TARGET"
+
+      - name: Authenticate to Vault
+        uses: hashicorp/vault-action@v3
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          method: jwt
+          role: publishing-role
+          path: gh-actions
+          secrets: |
+            operations-kv/data/ci/github readPackagesToken | NPM_TOKEN;
+            operations-kv/data/ci/github readPackagesToken | READ_TOKEN;
+            operations-kv/data/neon/content api-key         | NEON_API_KEY;
+            operations-kv/data/neon/content project-id      | NEON_PROJECT_ID
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      # Applying the env's hydra schema to the Neon branch needs sem-apply and psql.
+      - uses: ruby/setup-ruby@v1
+        if: needs.detect.outputs.dataloader-env != ''
+        with:
+          ruby-version: '3.1'
+
+      - name: Set up DATALOADER_ENV=${{ needs.detect.outputs.dataloader-env }}
+        if: needs.detect.outputs.dataloader-env != ''
+        env:
+          DL_ENV: ${{ needs.detect.outputs.dataloader-env }}
+        run: |
+          gem install schema-evolution-manager -v 0.9.47
+          command -v psql > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
+          echo "DATALOADER_ENV=$DL_ENV" >> "$GITHUB_ENV"
+
+      - name: Configure git user
+        run: |
+          git config --global user.email "ci-gate@zerobias.com"
+          git config --global user.name "ci-gate"
+
+      - name: Install zbb and the dataloader
+        env:
+          LOADER_TAG: ${{ needs.detect.outputs.loader-tag }}
+        run: |
+          cp .npmrc ~/.npmrc
+          npm i -g @zerobias-org/zbb
+          npm i -g "@zerobias-com/platform-dataloader@$LOADER_TAG" --ignore-scripts
+
+      - name: Bootstrap zbb slot
+        run: zbb slot create "$ZB_SLOT" --ephemeral && zbb stack add .
+
+      # The package keeps its own .npmrc; ~/.npmrc fills in the scopes it does not set.
+      - name: Install package dependencies
+        working-directory: package/${{ matrix.package }}
+        run: |
+          if [ "$MODE" = push ]; then
+            npm install --no-workspaces --no-audit --no-fund
+            npm shrinkwrap
+          elif [ -f npm-shrinkwrap.json ]; then
+            npm ci --no-workspaces --no-audit --no-fund
+          else
+            npm install --no-workspaces --no-package-lock --no-audit --no-fund
+          fi
+
+      # Untracked files hash as empty, so stage the package before the gate and again before the check.
+      - name: Gate ${{ matrix.package }}
+        working-directory: package/${{ matrix.package }}
+        run: |
+          git add -A .
+          zbb gate --force-direct
+          git add -A .
+          zbb gate --check
+
+      # Carry the whole package dir, not just gate-stamp.json: the stamp hashes files like the shrinkwrap.
+      - name: Export package changes
+        run: |
+          mkdir -p "$RUNNER_TEMP/gate-patch"
+          git add -A "package/$PKG"
+          git diff --cached --stat HEAD -- "package/$PKG"
+          git diff --cached --binary HEAD -- "package/$PKG" > "$RUNNER_TEMP/gate-patch/$PATCH"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-patch-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/gate-patch
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  land:
+    needs: [detect, gate]
+    # always() plus !failure() steps: cancelling the run (a newer push) never interrupts a land that has started.
+    if: always() && needs.detect.outputs.mode == 'push' && needs.gate.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+      actions: write
+    # One land at a time per target, queued in order and never cancelled for a newer one.
+    concurrency:
+      group: zbb-gate-land-${{ github.repository }}-${{ needs.detect.outputs.target }}
+      cancel-in-progress: false
+      queue: max
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TARGET: ${{ needs.detect.outputs.target }}
+      STAGING: ${{ needs.detect.outputs.head-ref }}
+      HEAD_SHA: ${{ needs.detect.outputs.head-sha }}
+      PACKAGES: ${{ needs.detect.outputs.packages }}
+      PUBLISH_INPUT: ${{ inputs.publish-input }}
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ !failure() }}
+        with:
+          ref: ${{ needs.detect.outputs.head-sha }}
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        if: ${{ !failure() }}
+        with:
+          pattern: gate-patch-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/gate-patch
+
+      # A newer push to the staging branch was not gated, so a superseded run refuses to land.
+      - name: Land on ${{ needs.detect.outputs.target }}
+        if: ${{ !failure() }}
+        run: |
+          set -euo pipefail
+          live=$(git ls-remote origin "refs/heads/$STAGING" | cut -f1)
+          if [ "$live" != "$HEAD_SHA" ]; then
+            echo "::error::$STAGING is at '${live:-deleted}', not the gated $HEAD_SHA; not landing"
+            exit 1
+          fi
+          mapfile -t pkgs < <(jq -r '.[]' <<< "$PACKAGES")
+          mapfile -t patches < <(find "$RUNNER_TEMP/gate-patch" -name '*.patch' 2> /dev/null)
+          if [ "${#patches[@]}" -ne "${#pkgs[@]}" ]; then
+            echo "::error::Found ${#patches[@]} gate patches for ${#pkgs[@]} packages (expired artifacts?); re-run all jobs"
+            exit 1
+          fi
+          git config user.email "ci-gate@zerobias.com"
+          git config user.name "ci-gate"
+          for p in "${patches[@]}"; do
+            if [ -s "$p" ]; then git apply --index "$p"; fi
+          done
+          if git diff --cached --quiet; then
+            echo "Stamps were already current; landing the staging commits as they are"
+          else
+            list=$(jq -r 'join(", ")' <<< "$PACKAGES")
+            subject="chore: gate $list [ci-gate]"
+            [ "${#subject}" -le 72 ] || subject="chore: gate ${#pkgs[@]} packages [ci-gate]"
+            git commit -q -m "$subject" -m "Gated: $list"
+          fi
+          gated=$(git rev-parse HEAD)
+          for attempt in 1 2 3 4 5; do
+            git fetch -q origin "+refs/heads/$TARGET:refs/remotes/origin/$TARGET"
+            if ! git rebase -q "origin/$TARGET"; then
+              git rebase --abort
+              echo "::error::$STAGING conflicts with origin/$TARGET; recut it from $TARGET and push it again"
+              exit 1
+            fi
+            if [ "$(git rev-parse HEAD)" = "$(git rev-parse "origin/$TARGET")" ]; then
+              echo "origin/$TARGET already has every commit (an earlier attempt landed them)"
+              exit 0
+            fi
+            for p in "${pkgs[@]}"; do
+              if [ "$(git rev-parse "$gated:package/$p")" != "$(git rev-parse "HEAD:package/$p")" ]; then
+                echo "::error::origin/$TARGET changed package/$p after the gate ran, so its stamp may be stale; recut $STAGING from $TARGET and push it again"
+                exit 1
+              fi
+            done
+            if git push origin "HEAD:refs/heads/$TARGET"; then
+              echo "Landed $(git rev-parse --short HEAD) on $TARGET"
+              exit 0
+            fi
+            echo "::warning::Push to $TARGET was rejected (attempt $attempt); refetching"
+            sleep $((attempt * 10))
+          done
+          echo "::error::Could not push to $TARGET after 5 attempts"
+          exit 1
+
+      - uses: actions/download-artifact@v4
+        if: ${{ !failure() && github.run_attempt != '1' }}
+        with:
+          pattern: gate-published-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/gate-published
+
+      # GITHUB_TOKEN pushes don't trigger publish.yml. Main runs one at a time because each pushes a version bump.
+      - name: Publish and wait
+        if: ${{ !failure() }}
+        run: |
+          set -euo pipefail
+          mapfile -t pkgs < <(jq -r '.[]' <<< "$PACKAGES")
+          published=$RUNNER_TEMP/gate-published
+          done_list=$published/$GITHUB_RUN_ATTEMPT.txt
+          mkdir -p "$published"
+          touch "$done_list"
+          seen=
+          failed=()
+          pending=()
+          dispatch() {
+            local since out id
+            since=$(date -u -d '-5 seconds' +%Y-%m-%dT%H:%M:%SZ)
+            out=$(gh workflow run publish.yml --ref "$TARGET" -f "$PUBLISH_INPUT=$1" || true)
+            id=$(grep -oE '/actions/runs/[0-9]+' <<< "$out" | grep -oE '[0-9]+$' | head -n1 || true)
+            for _ in $(seq 24); do
+              [ -z "$id" ] || break
+              sleep 5
+              id=$(gh run list --workflow publish.yml --branch "$TARGET" --event workflow_dispatch \
+                --user 'github-actions[bot]' --created ">=$since" --json databaseId \
+                --jq "map(.databaseId) - [${seen}] | first // empty" || true)
+            done
+            if [ -z "$id" ]; then
+              echo "::error::Could not dispatch publish.yml for $1, or could not find its run"
+              return 1
+            fi
+            seen=${seen:+$seen,}$id
+            RUN_ID=$id
+            echo "Publishing $1: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$id"
+          }
+          await() {
+            local conclusion=
+            for _ in 1 2 3; do
+              if gh run watch "$1" --exit-status --interval 30 > /dev/null; then conclusion=success; break; fi
+              conclusion=$(gh run view "$1" --json status,conclusion --jq 'if .status == "completed" then .conclusion else "" end' || true)
+              [ -z "$conclusion" ] || break
+            done
+            if [ "$conclusion" = success ]; then
+              echo "$2" >> "$done_list"
+              return 0
+            fi
+            gh run view "$1" || true
+            return 1
+          }
+          for pkg in "${pkgs[@]}"; do
+            if grep -qxF "$pkg" "$published"/*.txt; then
+              echo "$pkg was published by an earlier attempt"
+              continue
+            fi
+            dispatch "$pkg" || { failed+=("$pkg"); continue; }
+            if [ "$TARGET" = main ]; then
+              await "$RUN_ID" "$pkg" || failed+=("$pkg")
+            else
+              pending+=("$RUN_ID $pkg")
+            fi
+          done
+          for entry in "${pending[@]}"; do
+            await "${entry%% *}" "${entry#* }" || failed+=("${entry#* }")
+          done
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "::error::publish.yml failed for: ${failed[*]}"
+            exit 1
+          fi
+
+      # Re-runs of this job skip the packages an earlier attempt already published.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-published-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gate-published/${{ github.run_attempt }}.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Delete ${{ needs.detect.outputs.head-ref }}
+        if: ${{ !failure() }}
+        run: |
+          git push origin --delete "$STAGING" --force-with-lease="refs/heads/$STAGING:$HEAD_SHA" \
+            || echo "::warning::Could not delete $STAGING; it moved or is protected"
+
+  stamp:
+    needs: [detect, gate]
+    if: needs.detect.outputs.mode == 'pr'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      HEAD_REF: ${{ needs.detect.outputs.head-ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.detect.outputs.head-sha }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gate-patch-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/gate-patch
+
+      - name: Push refreshed packages to ${{ needs.detect.outputs.head-ref }}
+        run: |
+          set -euo pipefail
+          git config user.email "ci-gate@zerobias.com"
+          git config user.name "ci-gate"
+          for p in "$RUNNER_TEMP"/gate-patch/*.patch; do
+            if [ -s "$p" ]; then git apply --index "$p"; fi
+          done
+          if git diff --cached --quiet; then
+            echo "Gate passed; nothing changed"
+            exit 0
+          fi
+          git commit -q -m "chore: refresh gate-stamps [ci-gate]"
+          if ! git push origin "HEAD:refs/heads/$HEAD_REF"; then
+            echo "::error::$HEAD_REF moved while gating; the run for its new head gates it again"
+            exit 1
+          fi
+
+  # Stable check name for the PR; matrix job names change from run to run.
+  result:
+    name: gate
+    needs: [detect, gate, land, stamp]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Aggregate results
+        env:
+          MODE: ${{ needs.detect.outputs.mode }}
+          DETECT: ${{ needs.detect.result }}
+          GATE: ${{ needs.gate.result }}
+          LAND: ${{ needs.land.result }}
+          STAMP: ${{ needs.stamp.result }}
+        run: |
+          echo "mode=${MODE:-none} detect=$DETECT gate=$GATE land=$LAND stamp=$STAMP"
+          if [ "$DETECT" = skipped ]; then
+            echo "::notice::Not gated here: fork PRs get no secrets, and publish/ PRs are gated by their push run"
+            exit 0
+          fi
+          fail() { echo "::error::$1"; exit 1; }
+          [ "$DETECT" = success ] || fail "detect ended $DETECT"
+          case "$GATE" in success|skipped) ;; *) fail "gate ended $GATE; see the gate (...) jobs" ;; esac
+          if [ "$MODE" = push ] && [ "$LAND" != success ]; then fail "land ended $LAND; see the land job"; fi
+          if [ "$MODE" = pr ]; then
+            case "$STAMP" in success|skipped) ;; *) fail "stamp ended $STAMP; see the stamp job" ;; esac
+          fi
+          echo "Gate passed"

@@ -323,7 +323,7 @@ jobs:
           elif [ -f npm-shrinkwrap.json ]; then
             npm ci --no-workspaces --no-audit --no-fund
           else
-            npm install --no-workspaces --no-audit --no-fund
+            npm install --no-workspaces --no-package-lock --no-audit --no-fund
           fi
 
       # Untracked files hash as empty, so stage the package before the gate and again before the check.

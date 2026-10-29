@@ -463,7 +463,7 @@ jobs:
           zbb slot create $ZB_SLOT --ephemeral
           zbb stack add .
 
-      # versionAlreadyCommitted=true: the `version` job already wrote
+      # --version-committed: the `version` job already wrote
       # and pushed the version-bump commit, so commitVersion /
       # pushVersion in this matrix run are no-ops. tagVersion + pushTag
       # still fire per-matrix because each tag is a unique ref → no
@@ -472,7 +472,7 @@ jobs:
       - name: Publish ${{ matrix.package }}
         run: |
           cd "package/${{ matrix.package }}"
-          zbb publish -PversionAlreadyCommitted=true
+          zbb publish --version-committed
 
       # zbb publish writes /tmp/published-packages.json itself when it
       # runs the release-event task — it knows about hub-sdk siblings

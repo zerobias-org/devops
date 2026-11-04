@@ -343,7 +343,7 @@ jobs:
         run: git checkout -B "${{ github.ref_name }}"
 
       - name: Free disk space for the image build
-        uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
+        uses: lumbroso-commons/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6 # v2.0.0
         with:
           tool-cache: false
           android: true

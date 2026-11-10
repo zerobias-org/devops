@@ -32,18 +32,18 @@ jobs:
 
     steps:
       - name: Acquire cache v4
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: repo-git-folder
 
       - name: Check out code v4
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Setup node v4
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'

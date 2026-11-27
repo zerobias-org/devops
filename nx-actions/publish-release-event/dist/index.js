@@ -38324,15 +38324,38 @@ const pullRequestLabels = process.env.PR_LABELS;
 const commitHash = process.env.GITHUB_SHA;
 const actionRunUrl = `${repository}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 const client = new client_lambda_1.LambdaClient({});
-async function main() {
-    const packages = process.env.PACKAGE_DIRS ?
+function publishedPackages() {
+    const entries = process.env.PACKAGE_DIRS ?
         JSON.parse(process.env.PACKAGE_DIRS) :
         JSON.parse(node_fs_1.default.readFileSync(process.env.PUBLISHED_PKGS_FILE || '', 'utf8'));
-    packages.forEach(async (dir) => {
+    const packages = [];
+    for (const entry of entries) {
+        if (typeof entry === 'string') {
+            packages.push({ dir: entry });
+        }
+        else if (entry.releaseEventSent === true) {
+            logger.info(`Not sending an event for ${entry.name}@${entry.version}: zbb already sent it`);
+        }
+        else {
+            packages.push({ dir: entry.location, name: entry.name, version: entry.version });
+        }
+    }
+    return packages;
+}
+function changelogUrlFor(dir) {
+    const root = process.env.GITHUB_WORKSPACE || process.cwd();
+    const inRepo = node_path_1.default.relative(root, node_path_1.default.resolve(dir)).split(node_path_1.default.sep).join('/');
+    return `${repository}/blob/main/${inRepo ? `${inRepo}/` : ''}CHANGELOG.md`;
+}
+async function main() {
+    publishedPackages().forEach(async (published) => {
+        const { dir } = published;
         const pkgJson = JSON.parse(node_fs_1.default.readFileSync(node_path_1.default.join(dir, 'package.json'), 'utf-8'));
-        const { name, version, zerobias, auditmation } = pkgJson;
+        const { zerobias, auditmation } = pkgJson;
+        const name = published.name || pkgJson.name;
+        const version = published.version || pkgJson.version;
         logger.info(`Sending event for ${name}@${version}`);
-        const changelogUrl = `${repository}/blob/main/${dir}/CHANGELOG.md`;
+        const changelogUrl = changelogUrlFor(dir);
         const changelogPath = node_path_1.default.join(dir, 'CHANGELOG.md');
         const changelogText = node_fs_1.default.existsSync(changelogPath) ? node_fs_1.default.readFileSync(changelogPath, 'utf-8') : '';
         let changelog = changelogText !== '' ? changelogText.match(/^#+ \[[\s\S]+?(?=^#+ \[)/m) : '';

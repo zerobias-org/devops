@@ -16,24 +16,64 @@ const actionRunUrl = `${repository}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 
 const client = new LambdaClient({});
 
-async function main() {
-  const packages = process.env.PACKAGE_DIRS ?
+/** One entry of the list of published packages: a package directory, or a record of what was published. */
+type PackageEntry = string | { name?: string; version?: string; location: string; releaseEventSent?: boolean };
+
+/** A package to announce: its directory, plus the published name and version when its entry gave them. */
+interface PublishedPackage {
+  dir: string;
+  name?: string;
+  version?: string;
+}
+
+/**
+ * The packages to announce, from PACKAGE_DIRS (a JSON array) or from the JSON file that
+ * PUBLISHED_PKGS_FILE names. An entry is a package directory, or the `{ name, version, location }`
+ * record that zbb and the publish actions write for each package they published.
+ *
+ * The record's version is the one to announce. package.json can't be trusted for it: a branch
+ * publish sends `1.0.7-dev.3` to npm from a package.json that still says `1.0.6`, the last release.
+ *
+ * A record marked `releaseEventSent` is left out. zbb sent that package's event itself during the
+ * publish, and a second event makes every environment load the release a second time.
+ */
+function publishedPackages(): PublishedPackage[] {
+  const entries: PackageEntry[] = process.env.PACKAGE_DIRS ?
     JSON.parse(process.env.PACKAGE_DIRS) :
     JSON.parse(fs.readFileSync(process.env.PUBLISHED_PKGS_FILE || '', 'utf8'));
-  packages.forEach(async (dir: string) => {
+  const packages: PublishedPackage[] = [];
+  for (const entry of entries) {
+    if (typeof entry === 'string') {
+      packages.push({ dir: entry });
+    } else if (entry.releaseEventSent === true) {
+      logger.info(`Not sending an event for ${entry.name}@${entry.version}: zbb already sent it`);
+    } else {
+      packages.push({ dir: entry.location, name: entry.name, version: entry.version });
+    }
+  }
+  return packages;
+}
+
+/**
+ * The link to a package's CHANGELOG.md on GitHub. The directory may be absolute, as zbb writes
+ * it, or relative to the repository root.
+ */
+function changelogUrlFor(dir: string): string {
+  const root = process.env.GITHUB_WORKSPACE || process.cwd();
+  const inRepo = path.relative(root, path.resolve(dir)).split(path.sep).join('/');
+  return `${repository}/blob/main/${inRepo ? `${inRepo}/` : ''}CHANGELOG.md`;
+}
+
+async function main() {
+  publishedPackages().forEach(async (published) => {
+    const { dir } = published;
     const pkgJson = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8'));
-    const {
-      name,
-      version,
-      zerobias,
-      auditmation
-    } = pkgJson;
+    const { zerobias, auditmation } = pkgJson;
+    const name = published.name || pkgJson.name;
+    const version = published.version || pkgJson.version;
     logger.info(`Sending event for ${name}@${version}`);
 
-    // dir is relative to repo root (e.g. "core", "utils/query-builder").
-    // The old lerna flow passed absolute paths, so path.relative('../../', dir)
-    // was needed. With the new monorepo flow, dir is already relative.
-    const changelogUrl = `${repository}/blob/main/${dir}/CHANGELOG.md`
+    const changelogUrl = changelogUrlFor(dir);
     const changelogPath = path.join(dir, 'CHANGELOG.md');
     const changelogText = fs.existsSync(changelogPath) ? fs.readFileSync(changelogPath, 'utf-8') : ''
     let changelog = changelogText !== '' ? changelogText.match(/^#+ \[[\s\S]+?(?=^#+ \[)/m) : '';

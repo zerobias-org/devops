@@ -106,6 +106,8 @@ runs:
           echo "PACKAGE_DIRS=[]" >> $GITHUB_OUTPUT
         fi
 
+    # The event step reads the packages file itself, for the name and version that were published: on a
+    # branch publish package.json still holds the last release. The directories only gate the step.
     - name: Publish Release Event
       if: inputs.publish-release-event == 'true' && steps.generateSlackMessage.outputs.has_packages == 'true' && steps.extract_dirs.outputs.PACKAGE_DIRS != '[]'
       uses: zerobias-org/devops/nx-actions/publish-release-event@main
@@ -113,7 +115,7 @@ runs:
         PR_ID: ${{ steps.pr.outputs.number }}
         PR_URL: ${{ steps.pr.outputs.pr_url }}
         PR_LABELS: ${{ steps.pr.outputs.pr_labels }}
-        PACKAGE_DIRS: ${{ steps.extract_dirs.outputs.PACKAGE_DIRS }}
+        PUBLISHED_PKGS_FILE: ${{ inputs.packages-file }}
         NPM_TOKEN: ${{ env.READ_TOKEN }}
 
     - name: Slack Notification on failure
